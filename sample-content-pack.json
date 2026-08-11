@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "pack": {
+    "id": "daily-growth-starter",
+    "title": "The Daily Growth Starter",
+    "subtitle": "Three days to begin",
+    "author": "Daily Growth",
+    "description": "Three original sample lessons that demonstrate the Daily Growth format.",
+    "color": "#d7e861",
+    "position": 1,
+    "sourceNote": "Original demonstration content included with the app."
+  },
+  "lessons": [
+    {
+      "id": "starter-001-begin-small",
+      "order": 1,
+      "title": "Begin smaller than your ambition",
+      "summary": "Big intentions are exciting, but small beginnings are repeatable. When a change feels almost too easy, you remove the need for perfect timing, unusual motivation or a completely free afternoon. The aim of a small start is not to lower your destination. It is to make beginning so natural that you can return tomorrow. A two-minute practice can become a doorway: read one page, clear one surface, take five slow breaths or send one honest message. Repetition gives a modest action room to grow.",
+      "whyItMatters": "Consistency is easier when the first step fits inside an ordinary day. Small actions also give you evidence that you are capable of showing up.",
+      "example": "Instead of promising to journal for thirty minutes every evening, you decide to write one true sentence before bed. Some nights the sentence becomes a page; other nights, one sentence is enough.",
+      "action": "Choose one useful action you can finish in under two minutes, and do it before the day ends.",
+      "reflection": "What have I been making too large to begin?",
+      "tags": ["consistency", "self-trust", "starting"]
+    },
+    {
+      "id": "starter-002-pause-before-answering",
+      "order": 2,
+      "title": "Let the pause do some work",
+      "summary": "A pause is not an empty space that must be filled. It gives your first reaction time to settle and your considered response time to arrive. In conversations, a few quiet seconds can prevent an automatic yes, a defensive reply or an explanation you never needed to give. Pausing also signals that you are listening closely enough to think. You do not need a dramatic silence. One breath, a sip of water or the words “Let me think about that” can create enough room to choose your response instead of being carried by it.",
+      "whyItMatters": "Many regrets begin as rushed reactions. A deliberate pause protects your boundaries while helping the other person feel heard.",
+      "example": "A colleague asks you to take on an urgent task. Rather than agreeing immediately, you pause and say, “Let me check what this would displace, then I’ll answer.”",
+      "action": "In one conversation today, take one full breath before answering a request or emotionally charged comment.",
+      "reflection": "What becomes possible when I do not rush to respond?",
+      "tags": ["communication", "boundaries", "calm"]
+    },
+    {
+      "id": "starter-003-notice-evidence",
+      "order": 3,
+      "title": "Notice the evidence of change",
+      "summary": "Growth often becomes invisible because you experience it gradually. You may focus on the distance remaining and overlook what has already changed: a conversation handled more calmly, a task begun without bargaining, a boundary held, or a difficult feeling allowed to pass. Looking for evidence is not empty positive thinking. It is an accurate review of behaviour. When you name a specific action, you teach yourself what progress looks like and make it easier to repeat. The evidence can be quiet. It only needs to be true.",
+      "whyItMatters": "Visible evidence builds self-trust. It shifts progress from a vague feeling into something you can recognize, learn from and continue.",
+      "example": "You still feel nervous in meetings, but this week you asked one clear question instead of staying silent. The nervousness remained; your behaviour changed.",
+      "action": "Write down one specific thing you handled differently this week, however small.",
+      "reflection": "What recent action proves that I am already changing?",
+      "tags": ["reflection", "progress", "self-trust"]
+    }
+  ]
+}

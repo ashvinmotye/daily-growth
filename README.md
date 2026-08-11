@@ -1,0 +1,64 @@
+# Daily Growth
+
+**One short lesson, one concrete action and one reflection every day.**
+
+Daily Growth is an installable, offline-first PWA for private personal-development content. The public app contains no book summaries. You import private JSON content packs locally, and the app stores the lessons, progress and journal entries in IndexedDB on that device.
+
+## What is included
+
+- Daily lesson reader with action and reflection prompts
+- Journey view with all imported lessons—future lessons are never locked
+- Private journal connected to each lesson
+- XP, levels, completion progress and a gentle reading rhythm
+- Additive JSON imports with a preview of new, updated and unchanged lessons
+- IndexedDB storage, full JSON backup and merge-based restore
+- Removable content packs; progress reconnects if the same pack is re-imported
+- Responsive mobile layout, dark mode, adjustable text size and offline support
+- A three-lesson original sample pack and a formal JSON Schema
+
+## Run locally
+
+The app uses JavaScript modules and a service worker, so open it through a local web server rather than double-clicking `index.html`.
+
+```bash
+python3 -m http.server 8080
+```
+
+Then open `http://localhost:8080`.
+
+## Deploy on GitHub Pages
+
+1. Put all files from this folder in the root of a GitHub repository.
+2. In the repository, open **Settings → Pages**.
+3. Choose **Deploy from a branch**, select `main` and `/ (root)`, then save.
+4. Open the published HTTPS address once while online so the app shell can be cached.
+
+On iPhone or iPad, open the site in Safari, tap **Share**, then **Add to Home Screen**. Other iOS browsers may not expose the installation option reliably.
+
+## Import a content pack
+
+Open **Settings → Content library → Import pack** and select a JSON file.
+
+Every pack and lesson needs a permanent ID. Import behaviour is additive:
+
+- a new lesson ID is added;
+- a matching lesson ID in the same pack is updated;
+- identical content is left unchanged;
+- an ID already owned by another pack is rejected;
+- reading progress and reflections are never reset by a content update.
+
+Use `sample-content-pack.json` as a readable example and `content-pack.schema.json` as the specification.
+
+## Private content and Git
+
+Place working private JSON files in `content-packs/` or `private-content/`; both locations are ignored by Git. Imported files do not need to remain beside the app—the browser stores their data locally after import.
+
+Before clearing browser data or moving devices, use **Settings → Backup & transfer → Export full backup**. A backup includes imported content, progress, reflections and settings.
+
+## Copyright boundary
+
+Daily Growth is an independent educational tool and is not affiliated with or endorsed by any author or publisher. Do not commit EPUB files, book covers, publisher artwork, extensive quotations or private lesson packs to the public repository. The MIT license covers this app's code and bundled original sample content; it does not grant rights to third-party material imported by a user.
+
+## Data and privacy
+
+There is no account, server database, analytics SDK or cloud sync. App data lives in the current browser profile. Different browsers and devices have separate libraries unless you transfer a backup manually.

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f5f0e5" />
+    <meta name="description" content="One short lesson, one concrete action and one reflection every day." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Daily Growth" />
+    <title>Daily Growth</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+
+    <div id="app-shell" class="app-shell">
+      <aside class="sidebar" aria-label="Main navigation">
+        <button class="brand" data-view="today" aria-label="Daily Growth home">
+          <span class="brand-mark" aria-hidden="true">✦</span>
+          <span>
+            <strong>Daily Growth</strong>
+            <small>One lesson better</small>
+          </span>
+        </button>
+
+        <nav class="side-nav">
+          <button class="nav-item is-active" data-view="today">
+            <span aria-hidden="true">☀</span><span>Today</span>
+          </button>
+          <button class="nav-item" data-view="journey">
+            <span aria-hidden="true">↗</span><span>Journey</span>
+          </button>
+          <button class="nav-item" data-view="journal">
+            <span aria-hidden="true">✎</span><span>Journal</span>
+          </button>
+          <button class="nav-item" data-view="insights">
+            <span aria-hidden="true">◒</span><span>Insights</span>
+          </button>
+          <button class="nav-item" data-view="settings">
+            <span aria-hidden="true">⚙</span><span>Settings</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-growth" id="sidebar-growth"></div>
+        <p class="local-note"><span aria-hidden="true">●</span> Private &amp; on this device</p>
+      </aside>
+
+      <div class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="page-eyebrow">Your daily practice</p>
+            <h1 id="page-title">Today</h1>
+          </div>
+          <div class="top-actions">
+            <div class="xp-chip" id="xp-chip" aria-label="Experience points"></div>
+            <button class="icon-button" id="quick-theme" aria-label="Toggle dark mode" title="Toggle dark mode">☾</button>
+          </div>
+        </header>
+
+        <main id="main-content" class="main-content" tabindex="-1">
+          <div class="loading-state">
+            <span class="loading-sprout" aria-hidden="true">✦</span>
+            <p>Preparing your journey…</p>
+          </div>
+        </main>
+      </div>
+
+      <nav class="bottom-nav" aria-label="Main navigation">
+        <button class="nav-item is-active" data-view="today"><span aria-hidden="true">☀</span><small>Today</small></button>
+        <button class="nav-item" data-view="journey"><span aria-hidden="true">↗</span><small>Journey</small></button>
+        <button class="nav-item" data-view="journal"><span aria-hidden="true">✎</span><small>Journal</small></button>
+        <button class="nav-item" data-view="insights"><span aria-hidden="true">◒</span><small>Insights</small></button>
+        <button class="nav-item" data-view="settings"><span aria-hidden="true">⚙</span><small>Settings</small></button>
+      </nav>
+    </div>
+
+    <input id="content-file-input" type="file" accept="application/json,.json" hidden />
+    <input id="backup-file-input" type="file" accept="application/json,.json" hidden />
+
+    <dialog id="import-dialog" class="app-dialog" aria-labelledby="import-dialog-title">
+      <div id="import-dialog-content"></div>
+    </dialog>
+
+    <dialog id="confirm-dialog" class="app-dialog compact-dialog" aria-labelledby="confirm-dialog-title">
+      <div class="dialog-head">
+        <span class="dialog-icon warning" aria-hidden="true">!</span>
+        <div>
+          <p class="eyebrow">Please confirm</p>
+          <h2 id="confirm-dialog-title">Are you sure?</h2>
+        </div>
+      </div>
+      <p id="confirm-dialog-message" class="dialog-copy"></p>
+      <div class="dialog-actions">
+        <button class="button ghost" id="confirm-cancel">Cancel</button>
+        <button class="button danger" id="confirm-accept">Confirm</button>
+      </div>
+    </dialog>
+
+    <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <div id="confetti" class="confetti-layer" aria-hidden="true"></div>
+
+    <noscript>
+      <div class="noscript">Daily Growth needs JavaScript enabled to save lessons and progress on this device.</div>
+    </noscript>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
