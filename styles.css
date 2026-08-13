@@ -347,6 +347,13 @@ a:focus-visible {
 
 .today-layout { display: grid; grid-template-columns: minmax(0, 760px) minmax(230px, 300px); align-items: start; justify-content: center; gap: clamp(24px, 4vw, 52px); }
 .lesson-column { min-width: 0; }
+.pack-switcher { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 13px; margin-bottom: 16px; padding: 13px 15px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-soft); }
+.pack-switcher-mark { display: grid; place-items: center; width: 40px; height: 40px; color: #173e35; background: var(--pack-color); border-radius: 11px 11px 11px 4px; }
+.pack-switcher label { display: grid; min-width: 0; gap: 2px; }
+.pack-switcher label small { color: var(--ink-faint); font-size: .6rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.pack-switcher select { width: 100%; padding: 2px 28px 2px 0; overflow: hidden; color: var(--ink); background: transparent; border: 0; outline: 0; font: 700 .85rem/1.35 var(--font-body); text-overflow: ellipsis; cursor: pointer; }
+.pack-switcher-progress { color: var(--ink-soft); font-size: .75rem; font-weight: 700; white-space: nowrap; }
+.pack-switcher-progress small { font-size: .62rem; font-weight: 500; }
 .lesson-paper {
   position: relative;
   overflow: hidden;
@@ -419,7 +426,7 @@ a:focus-visible {
 .journey-toolbar { display: flex; justify-content: space-between; gap: 12px; margin: 24px 0; }
 .search-box { flex: 1; display: flex; align-items: center; gap: 9px; max-width: 520px; padding: 0 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 11px; }
 .search-box input { width: 100%; padding: 12px 0; color: var(--ink); background: transparent; border: 0; outline: 0; }
-.select-box select,.setting-date input { min-height: 46px; padding: 0 36px 0 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 11px; }
+.select-box select,.setting-date input,.setting-date select { min-height: 46px; padding: 0 36px 0 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 11px; }
 .journey-path { position: relative; display: grid; gap: 12px; padding-left: 10px; }
 .journey-path::before { content: ""; position: absolute; top: 24px; bottom: 24px; left: 35px; width: 2px; background: var(--line); }
 .journey-step { position: relative; z-index: 1; display: grid; grid-template-columns: 50px minmax(0, 1fr) auto; align-items: center; gap: 17px; width: 100%; padding: 17px 20px 17px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 15px; box-shadow: var(--shadow-soft); cursor: pointer; text-align: left; transition: transform 160ms ease, border-color 160ms ease; }
@@ -511,12 +518,13 @@ a:focus-visible {
   .journey-hero { align-items: start; flex-direction: column; padding: 28px 23px; }.journey-hero-stat { text-align: left; }.journey-toolbar { flex-direction: column; }.search-box { max-width: none; }.select-box select { width: 100%; }.journey-path { padding-left: 0; }.journey-path::before { left: 23px; }.journey-step { grid-template-columns: 45px 1fr; padding-right: 14px; gap: 11px; }.step-marker { width: 44px; height: 44px; }.step-status { display: none; }.step-body > span { font-size: .7rem; }
   .journal-intro { align-items: flex-start; }.journal-mark { width: 52px; height: 52px; }.journal-intro h2 { font-size: 1.5rem; }.journal-grid { grid-template-columns: 1fr; }.journal-entry { min-height: 220px; padding: 23px; }
   .insight-grid { grid-template-columns: repeat(2, 1fr); }.stat-card { min-height: 160px; padding: 17px; }.stat-card > strong { font-size: 2.2rem; }.stat-symbol { margin-bottom: 12px; }.rhythm-days { grid-template-columns: repeat(7, 1fr); row-gap: 15px; }.activity-panel,.pack-progress-panel { padding: 20px 16px; }.section-heading { align-items: start; flex-direction: column; gap: 6px; }
-  .settings-section { padding: 20px 16px; }.settings-heading { grid-template-columns: 36px 1fr; }.settings-heading > .button { grid-column: 1 / -1; width: 100%; }.setting-row { align-items: stretch; flex-direction: column; gap: 12px; }.segmented-control { width: 100%; }.segmented-control button { flex: 1; min-width: 0; }.setting-date input { width: 100%; }.content-pack-row { grid-template-columns: 42px minmax(0,1fr) 34px; }.content-pack-row > small { display: none; }.data-actions { grid-template-columns: 1fr; }.danger-zone .button { grid-column: 1 / -1; width: 100%; }.inline-empty { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .settings-section { padding: 20px 16px; }.settings-heading { grid-template-columns: 36px 1fr; }.settings-heading > .button { grid-column: 1 / -1; width: 100%; }.setting-row { align-items: stretch; flex-direction: column; gap: 12px; }.segmented-control { width: 100%; }.segmented-control button { flex: 1; min-width: 0; }.setting-date input,.setting-date select { width: 100%; }.content-pack-row { grid-template-columns: 42px minmax(0,1fr) 34px; }.content-pack-row > small { display: none; }.data-actions { grid-template-columns: 1fr; }.danger-zone .button { grid-column: 1 / -1; width: 100%; }.inline-empty { align-items: flex-start; flex-direction: column; gap: 8px; }
   .dialog-actions { flex-direction: column-reverse; }.dialog-actions .button { width: 100%; }.import-summary.four-items { grid-template-columns: repeat(2, 1fr); }.import-summary.four-items div:nth-child(2) { border-right: 0; }.import-summary.four-items div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
   .toast-region { right: 12px; bottom: calc(78px + env(safe-area-inset-bottom)); }
 }
 
 @media (max-width: 430px) {
+  .pack-switcher { grid-template-columns: 38px minmax(0, 1fr); padding: 11px 12px; }.pack-switcher-mark { width: 36px; height: 36px; }.pack-switcher-progress { grid-column: 2; margin-top: -2px; }
   .lesson-meta { max-width: 78%; }
   .catchup-banner { align-items: flex-start; }
   .insight-grid { grid-template-columns: 1fr 1fr; gap: 9px; }.stat-card { padding: 15px; }.stat-card > p { min-height: 2.2em; }

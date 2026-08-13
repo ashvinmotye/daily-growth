@@ -1,4 +1,4 @@
-const CACHE_NAME = "daily-growth-shell-v1";
+const CACHE_NAME = "daily-growth-shell-v2";
 const ROOT = new URL("./", self.location.href);
 const APP_SHELL = [
   "./",

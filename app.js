@@ -10,7 +10,7 @@ import {
   saveSetting,
 } from "./db.js";
 
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.1.0";
 const main = document.querySelector("#main-content");
 const pageTitle = document.querySelector("#page-title");
 const pageEyebrow = document.querySelector("#page-eyebrow");
@@ -55,7 +55,7 @@ const VIEW_META = {
 const DEFAULT_SETTINGS = {
   theme: "system",
   fontScale: "medium",
-  journeyStart: "",
+  activePackId: "",
 };
 
 function escapeHtml(value = "") {
@@ -118,8 +118,56 @@ function orderedLessons() {
   });
 }
 
-function calculateStats() {
-  const lessons = orderedLessons();
+function lessonsForPack(packId) {
+  return orderedLessons().filter((lesson) => lesson.packId === packId);
+}
+
+function getActivePackId() {
+  const packs = orderedPacks();
+  const savedPackId = getSetting("activePackId");
+  return packs.some((pack) => pack.id === savedPackId) ? savedPackId : packs[0]?.id || "";
+}
+
+function packCursorKey(packId) {
+  return `packCursor:${packId}`;
+}
+
+function getPackCursorIndex(lessons, packId) {
+  if (!lessons.length) return -1;
+
+  const savedLessonId = getSetting(packCursorKey(packId));
+  const savedIndex = lessons.findIndex((lesson) => lesson.id === savedLessonId);
+  if (savedIndex >= 0) return savedIndex;
+
+  const firstIncomplete = lessons.findIndex((lesson) => !progressMap().get(lesson.id)?.completedAt);
+  return firstIncomplete >= 0 ? firstIncomplete : lessons.length - 1;
+}
+
+async function rememberLesson(lessonId) {
+  const lesson = state.lessons.find((item) => item.id === lessonId);
+  if (!lesson) return null;
+
+  await saveSetting("activePackId", lesson.packId);
+  await saveSetting(packCursorKey(lesson.packId), lesson.id);
+  await refreshState();
+  ui.selectedLessonId = lesson.id;
+  return lesson;
+}
+
+async function selectActivePack(packId) {
+  const pack = state.packs.find((item) => item.id === packId);
+  if (!pack) return null;
+
+  const lessons = lessonsForPack(pack.id);
+  const cursorLesson = lessons[getPackCursorIndex(lessons, pack.id)];
+  await saveSetting("activePackId", pack.id);
+  if (cursorLesson) await saveSetting(packCursorKey(pack.id), cursorLesson.id);
+  await refreshState();
+  ui.selectedLessonId = null;
+  return pack;
+}
+
+function calculateStats(lessons = orderedLessons()) {
   const progress = progressMap();
   const reflections = reflectionMap();
   const completed = lessons.filter((lesson) => progress.get(lesson.id)?.completedAt);
@@ -151,21 +199,6 @@ function calculateStats() {
     streak,
     completionDays,
   };
-}
-
-function getJourneyStart() {
-  const saved = getSetting("journeyStart");
-  if (saved) return saved;
-  const firstPack = orderedPacks()[0];
-  return firstPack?.importedAt ? localDateKey(new Date(firstPack.importedAt)) : localDateKey();
-}
-
-function getOfficialDay(total) {
-  if (!total) return 0;
-  const start = parseLocalDate(getJourneyStart());
-  const today = parseLocalDate(localDateKey());
-  const elapsed = Math.floor((today - start) / 86400000);
-  return Math.max(1, Math.min(total, elapsed + 1));
 }
 
 function normalizeText(value) {
@@ -356,42 +389,61 @@ function emptyLibraryMarkup() {
 }
 
 function renderToday() {
-  const lessons = orderedLessons();
-  if (!lessons.length) {
+  if (!state.lessons.length) {
     main.innerHTML = emptyLibraryMarkup();
     return;
   }
 
-  const officialDay = getOfficialDay(lessons.length);
-  const selectedIndex = ui.selectedLessonId ? lessons.findIndex((lesson) => lesson.id === ui.selectedLessonId) : officialDay - 1;
-  const safeIndex = selectedIndex >= 0 ? selectedIndex : officialDay - 1;
-  renderLesson(lessons[safeIndex], safeIndex, lessons, officialDay);
+  const activePackId = getActivePackId();
+  const lessons = lessonsForPack(activePackId);
+  const cursorIndex = getPackCursorIndex(lessons, activePackId);
+  const selectedIndex = ui.selectedLessonId
+    ? lessons.findIndex((lesson) => lesson.id === ui.selectedLessonId)
+    : cursorIndex;
+  const safeIndex = selectedIndex >= 0 ? selectedIndex : cursorIndex;
+  renderLesson(lessons[safeIndex], safeIndex, lessons, cursorIndex, activePackId);
 }
 
-function renderLesson(lesson, lessonIndex, lessons, officialDay) {
+function renderPackSwitcher(activePackId) {
+  const packs = orderedPacks();
+  const activeLessons = lessonsForPack(activePackId);
+  const completed = activeLessons.filter((lesson) => progressMap().get(lesson.id)?.completedAt).length;
+  const pack = packs.find((item) => item.id === activePackId);
+
+  return `
+    <section class="pack-switcher" style="--pack-color:${escapeHtml(pack?.color || "#d7e861")}">
+      <span class="pack-switcher-mark" aria-hidden="true">✦</span>
+      <label for="today-pack-select">
+        <small>Current content pack</small>
+        <select id="today-pack-select">
+          ${packs.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === activePackId ? "selected" : ""}>${escapeHtml(item.title)}</option>`).join("")}
+        </select>
+      </label>
+      <span class="pack-switcher-progress">${completed}/${activeLessons.length}<small> complete</small></span>
+    </section>
+  `;
+}
+
+function renderLesson(lesson, lessonIndex, lessons, cursorIndex, activePackId) {
   const packs = packMap();
   const progress = progressMap().get(lesson.id) || { lessonId: lesson.id };
   const savedReflection = reflectionMap().get(lesson.id)?.text || "";
   const pack = packs.get(lesson.packId);
   const isComplete = Boolean(progress.completedAt);
   const actionComplete = Boolean(progress.actionCompletedAt);
-  const isToday = lessonIndex === officialDay - 1;
-  const pastIncomplete = lessons.slice(0, officialDay - 1).filter((item) => !progressMap().get(item.id)?.completedAt).length;
+  const isCurrent = lessonIndex === cursorIndex;
+  const nextLesson = lessons[lessonIndex + 1];
 
   main.innerHTML = `
     <section class="today-layout">
       <div class="lesson-column">
-        ${!isToday ? `
-          <button class="back-to-today" data-action="go-today">← Back to today’s lesson</button>
-        ` : ""}
-        ${isToday && pastIncomplete ? `
-          <div class="catchup-banner"><span aria-hidden="true">↺</span><p><strong>${pastIncomplete} earlier ${pastIncomplete === 1 ? "lesson" : "lessons"}</strong> waiting when you are ready. No pressure.</p><button data-view="journey">View</button></div>
-        ` : ""}
+        ${renderPackSwitcher(activePackId)}
+        ${!isCurrent ? `<button class="back-to-today" data-action="go-current">← Back to this pack’s current lesson</button>` : ""}
 
         <article class="lesson-paper ${isComplete ? "is-complete" : ""}">
           <div class="paper-accent" style="--pack-color:${escapeHtml(pack?.color || "#d7e861")}"></div>
           <div class="lesson-meta">
-            <span>Day ${lessonIndex + 1} of ${lessons.length}</span>
+            <span>Lesson ${lessonIndex + 1} of ${lessons.length}</span>
             <span class="meta-dot">•</span>
             <span>${escapeHtml(pack?.title || "Content pack")}</span>
           </div>
@@ -445,34 +497,34 @@ function renderLesson(lesson, lessonIndex, lessons, officialDay) {
         <div class="lesson-completion">
           <button class="button ${isComplete ? "completed" : "primary"} complete-button" data-action="complete-lesson" data-lesson-id="${escapeHtml(lesson.id)}" ${isComplete ? "disabled" : ""}>
             <span aria-hidden="true">${isComplete ? "✓" : "✦"}</span>
-            ${isComplete ? `Completed ${formatDate(progress.completedAt, { month: "short", day: "numeric" })}` : "Complete today’s lesson"}
+            ${isComplete ? `Completed ${formatDate(progress.completedAt, { month: "short", day: "numeric" })}` : nextLesson ? "Complete & continue" : "Complete content pack"}
             ${isComplete ? "" : "<small>+10 XP</small>"}
           </button>
           <p>${isComplete ? "This lesson is part of your growth story." : "There is no perfect answer. Showing up is enough."}</p>
         </div>
 
         <div class="lesson-pagination" aria-label="Lesson navigation">
-          <button data-action="open-index" data-index="${lessonIndex - 1}" ${lessonIndex === 0 ? "disabled" : ""}>← <span>Previous</span></button>
+          <button data-action="open-lesson-in-pack" data-lesson-id="${escapeHtml(lessons[lessonIndex - 1]?.id || "")}" ${lessonIndex === 0 ? "disabled" : ""}>← <span>Previous</span></button>
           <span>${lessonIndex + 1} / ${lessons.length}</span>
-          <button data-action="open-index" data-index="${lessonIndex + 1}" ${lessonIndex === lessons.length - 1 ? "disabled" : ""}><span>Next</span> →</button>
+          <button data-action="open-lesson-in-pack" data-lesson-id="${escapeHtml(lessons[lessonIndex + 1]?.id || "")}" ${lessonIndex === lessons.length - 1 ? "disabled" : ""}><span>Next</span> →</button>
         </div>
       </div>
 
       <aside class="today-aside">
-        ${renderDailyProgressCard(lessons, officialDay)}
+        ${renderDailyProgressCard(lessons, cursorIndex, pack)}
         ${renderQuoteCard(pack)}
       </aside>
     </section>
   `;
 }
 
-function renderDailyProgressCard(lessons, officialDay) {
-  const stats = calculateStats();
+function renderDailyProgressCard(lessons, cursorIndex, pack) {
+  const stats = calculateStats(lessons);
   const circumference = 2 * Math.PI * 42;
   const offset = circumference - (stats.completionPercent / 100) * circumference;
   return `
     <section class="daily-progress-card">
-      <p class="eyebrow">Your journey</p>
+      <p class="eyebrow">${escapeHtml(pack?.title || "Current content pack")}</p>
       <div class="ring-wrap">
         <svg viewBox="0 0 100 100" role="img" aria-label="${stats.completionPercent}% complete">
           <circle class="ring-track" cx="50" cy="50" r="42"></circle>
@@ -481,11 +533,11 @@ function renderDailyProgressCard(lessons, officialDay) {
         <div><strong>${stats.completionPercent}%</strong><small>complete</small></div>
       </div>
       <dl class="mini-stats">
-        <div><dt>Today</dt><dd>Day ${officialDay}</dd></div>
+        <div><dt>Current</dt><dd>${cursorIndex + 1}/${lessons.length}</dd></div>
         <div><dt>Completed</dt><dd>${stats.completed}</dd></div>
         <div><dt>Rhythm</dt><dd>${stats.streak} ${stats.streak === 1 ? "day" : "days"}</dd></div>
       </dl>
-      <button class="text-button" data-view="journey">See the full journey <span>→</span></button>
+      <button class="text-button" data-action="view-active-pack">See this content pack <span>→</span></button>
     </section>
   `;
 }
@@ -507,14 +559,17 @@ function renderJourney() {
   }
   const packs = orderedPacks();
   const progress = progressMap();
-  const officialDay = getOfficialDay(lessons.length);
+  const activePackId = getActivePackId();
+  const activePackLessons = lessonsForPack(activePackId);
+  const activeLesson = activePackLessons[getPackCursorIndex(activePackLessons, activePackId)];
   const query = ui.journeySearch.toLowerCase();
   const filtered = lessons.filter((lesson) => {
     const matchesPack = ui.journeyPack === "all" || lesson.packId === ui.journeyPack;
     const matchesSearch = !query || `${lesson.title} ${lesson.summary} ${(lesson.tags || []).join(" ")}`.toLowerCase().includes(query);
     return matchesPack && matchesSearch;
   });
-  const stats = calculateStats();
+  const scopeLessons = ui.journeyPack === "all" ? lessons : lessonsForPack(ui.journeyPack);
+  const stats = calculateStats(scopeLessons);
 
   main.innerHTML = `
     <section class="journey-hero">
@@ -536,12 +591,13 @@ function renderJourney() {
         const pack = packs.find((item) => item.id === lesson.packId);
         const itemProgress = progress.get(lesson.id);
         const completed = Boolean(itemProgress?.completedAt);
-        const today = globalIndex === officialDay - 1;
+        const current = lesson.id === activeLesson?.id;
+        const displayNumber = ui.journeyPack === "all" ? globalIndex + 1 : lesson.order;
         return `
-          <button class="journey-step ${completed ? "is-complete" : ""} ${today ? "is-today" : ""}" data-action="open-lesson" data-lesson-id="${escapeHtml(lesson.id)}">
-            <span class="step-marker">${completed ? "✓" : globalIndex + 1}</span>
+          <button class="journey-step ${completed ? "is-complete" : ""} ${current ? "is-today" : ""}" data-action="open-lesson" data-lesson-id="${escapeHtml(lesson.id)}">
+            <span class="step-marker">${completed ? "✓" : displayNumber}</span>
             <span class="step-body">
-              <small>${escapeHtml(pack?.title || "Content pack")} ${today ? "· Today" : ""}</small>
+              <small>${escapeHtml(pack?.title || "Content pack")} ${current ? "· Current" : ""}</small>
               <strong>${escapeHtml(lesson.title)}</strong>
               <span>${escapeHtml(lesson.summary)}</span>
             </span>
@@ -583,8 +639,8 @@ function renderJournal() {
       <section class="empty-state">
         <span class="empty-icon" aria-hidden="true">✎</span>
         <h2>Your first reflection starts with one honest sentence.</h2>
-        <p>Open today’s lesson, pause for a moment, and write whatever feels true.</p>
-        <button class="button primary" data-view="today">Go to today’s lesson</button>
+        <p>Open the current lesson in your selected content pack, pause for a moment, and write whatever feels true.</p>
+        <button class="button primary" data-view="today">Go to current lesson</button>
       </section>
     `}
   `;
@@ -642,6 +698,7 @@ function renderSettings() {
   const fontScale = getSetting("fontScale") || "medium";
   const packs = orderedPacks();
   const lessons = orderedLessons();
+  const activePackId = getActivePackId();
 
   main.innerHTML = `
     <div class="settings-grid">
@@ -662,10 +719,12 @@ function renderSettings() {
       </section>
 
       <section class="settings-section">
-        <div class="settings-heading"><span aria-hidden="true">◷</span><div><h2>Daily journey</h2><p>One official lesson is highlighted for each calendar day.</p></div></div>
+        <div class="settings-heading"><span aria-hidden="true">◷</span><div><h2>Reading track</h2><p>Choose which content pack Today should continue.</p></div></div>
         <label class="setting-row setting-date">
-          <div><strong>Journey start date</strong><span>Future lessons remain browseable; nothing is locked.</span></div>
-          <input id="journey-start" type="date" value="${escapeHtml(getJourneyStart())}" />
+          <div><strong>Current content pack</strong><span>Every pack remembers its own reading position.</span></div>
+          <select id="settings-active-pack">
+            ${packs.map((pack) => `<option value="${escapeHtml(pack.id)}" ${pack.id === activePackId ? "selected" : ""}>${escapeHtml(pack.title)}</option>`).join("")}
+          </select>
         </label>
       </section>
 
@@ -830,8 +889,9 @@ async function handleAction(button) {
 
   if (action === "confirm-import" && ui.pendingImport) {
     const { pack, lessons, summary } = ui.pendingImport;
+    const hadContentPacks = state.packs.length > 0;
     await importContentPack(pack, lessons);
-    if (!getSetting("journeyStart")) await saveSetting("journeyStart", localDateKey());
+    if (!hadContentPacks) await saveSetting("activePackId", pack.id);
     closeImportDialog();
     await refreshState();
     applyAppearance();
@@ -848,38 +908,56 @@ async function handleAction(button) {
     showToast("Backup merged successfully.");
   }
 
-  if (action === "go-today") {
+  if (action === "go-current") {
     ui.selectedLessonId = null;
     render();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   if (action === "open-lesson") {
+    const lessonId = button.dataset.lessonId;
+    if (!await rememberLesson(lessonId)) return;
     ui.view = "today";
-    ui.selectedLessonId = button.dataset.lessonId;
     render();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  if (action === "open-index") {
-    const lessons = orderedLessons();
-    const lesson = lessons[Number(button.dataset.index)];
-    if (lesson) {
-      ui.view = "today";
-      ui.selectedLessonId = lesson.id;
-      render();
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
+  if (action === "open-lesson-in-pack") {
+    if (!await rememberLesson(button.dataset.lessonId)) return;
+    ui.view = "today";
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  if (action === "view-active-pack") {
+    ui.view = "journey";
+    ui.journeyPack = getActivePackId();
+    ui.selectedLessonId = null;
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   if (action === "complete-lesson") {
     const lessonId = button.dataset.lessonId;
+    const lesson = state.lessons.find((item) => item.id === lessonId);
+    if (!lesson) return;
     const existing = progressMap().get(lessonId) || { lessonId };
     await saveProgress({ ...existing, completedAt: new Date().toISOString() });
+    const packLessons = lessonsForPack(lesson.packId);
+    const lessonIndex = packLessons.findIndex((item) => item.id === lessonId);
+    const progress = progressMap();
+    const nextLesson = [
+      ...packLessons.slice(lessonIndex + 1),
+      ...packLessons.slice(0, lessonIndex),
+    ].find((item) => !progress.get(item.id)?.completedAt);
+
+    await saveSetting("activePackId", lesson.packId);
+    await saveSetting(packCursorKey(lesson.packId), nextLesson?.id || lesson.id);
     await refreshState();
+    ui.selectedLessonId = nextLesson?.id || lesson.id;
     render();
     celebrate();
-    showToast("Lesson completed. +10 XP");
+    showToast(nextLesson ? "Lesson completed. Your next lesson is ready. +10 XP" : "Content pack completed. +10 XP");
   }
 
   if (action === "toggle-action") {
@@ -933,8 +1011,13 @@ async function handleAction(button) {
       "Its lessons will leave this device. Saved progress and reflections are retained and will reconnect if you import the pack again.",
       "Remove pack",
       async () => {
+        const wasActive = getActivePackId() === pack.id;
         await removePackContent(pack.id);
         await refreshState();
+        if (wasActive) {
+          await saveSetting("activePackId", orderedPacks()[0]?.id || "");
+          await refreshState();
+        }
         ui.selectedLessonId = null;
         render();
         showToast(`${pack.title} removed.`);
@@ -994,13 +1077,23 @@ document.addEventListener("input", (event) => {
 document.addEventListener("change", async (event) => {
   if (event.target.id === "journey-pack-filter") {
     ui.journeyPack = event.target.value;
+    if (ui.journeyPack !== "all") {
+      const pack = await selectActivePack(ui.journeyPack);
+      if (pack) showToast(`${pack.title} is now your current content pack.`);
+    }
     renderJourney();
   }
-  if (event.target.id === "journey-start") {
-    await saveSetting("journeyStart", event.target.value || localDateKey());
-    await refreshState();
+  if (event.target.id === "today-pack-select") {
+    const pack = await selectActivePack(event.target.value);
+    ui.view = "today";
     render();
-    showToast("Journey start date updated.");
+    if (pack) showToast(`Continuing ${pack.title}.`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  if (event.target.id === "settings-active-pack") {
+    const pack = await selectActivePack(event.target.value);
+    renderSettings();
+    if (pack) showToast(`${pack.title} is now your current content pack.`);
   }
 });
 

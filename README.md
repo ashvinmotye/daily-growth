@@ -7,6 +7,7 @@ Daily Growth is an installable, offline-first PWA for private personal-developme
 ## What is included
 
 - Daily lesson reader with action and reflection prompts
+- Selectable reading track with an independent remembered position for every content pack
 - Journey view with all imported lessons—future lessons are never locked
 - Private journal connected to each lesson
 - XP, levels, completion progress and a gentle reading rhythm
@@ -46,6 +47,12 @@ Every pack and lesson needs a permanent ID. Import behaviour is additive:
 - identical content is left unchanged;
 - an ID already owned by another pack is rejected;
 - reading progress and reflections are never reset by a content update.
+
+## Continue a content pack
+
+Use the content-pack selector above the lesson on **Today**, or choose a pack in the **Journey** filter. That pack becomes your current reading track. Daily Growth remembers a separate position for every pack, keeps Previous and Next inside the selected pack, and prepares the next unfinished lesson from that pack when you complete one.
+
+Selecting **All content packs** in Journey changes only the list view; it does not replace your current reading track. Overall XP, journal entries and Insights still combine activity from every imported pack.
 
 Use `sample-content-pack.json` as a readable example and `content-pack.schema.json` as the specification.
 
