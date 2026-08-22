@@ -269,6 +269,7 @@ a:focus-visible {
 }
 .icon-button:hover { transform: translateY(-2px); background: var(--surface-soft); }
 .icon-button.quiet { box-shadow: none; background: transparent; }
+.top-actions .icon-button.is-active { color: #173e35; background: var(--lime); border-color: var(--lime); }
 
 .main-content { width: min(1240px, 100%); min-height: calc(100vh - 98px); margin: 0 auto; padding: 42px clamp(28px, 5vw, 76px) 90px; }
 .loading-state { display: grid; min-height: 50vh; place-items: center; align-content: center; gap: 12px; color: var(--ink-soft); }
@@ -548,10 +549,10 @@ a:focus-visible {
   .xp-chip { min-width: auto; padding: 7px 10px; }.xp-chip small { display: none; }
   .icon-button { width: 38px; height: 38px; }
   .main-content { min-height: calc(100vh - 76px); padding: 22px 15px 46px; }
-  .bottom-nav { position: fixed; z-index: 40; display: grid; grid-template-columns: repeat(6, 1fr); inset: auto 0 0; height: calc(66px + env(safe-area-inset-bottom)); padding: 7px 5px env(safe-area-inset-bottom); background: color-mix(in srgb, var(--surface) 94%, transparent); border-top: 1px solid var(--line); backdrop-filter: blur(18px); }
+  .bottom-nav { position: fixed; z-index: 40; display: grid; grid-template-columns: repeat(5, 1fr); inset: auto 0 0; height: calc(66px + env(safe-area-inset-bottom)); padding: 7px 7px env(safe-area-inset-bottom); background: color-mix(in srgb, var(--surface) 94%, transparent); border-top: 1px solid var(--line); backdrop-filter: blur(18px); }
   .bottom-nav .nav-item { display: grid; place-items: center; align-content: center; gap: 1px; color: var(--ink-faint); border-radius: 9px; }
   .bottom-nav .nav-item.is-active { color: var(--green-2); background: var(--surface-soft); }
-  .bottom-nav .nav-item > span { font-size: 1rem; line-height: 1; }.bottom-nav small { font-size: .53rem; font-weight: 700; }
+  .bottom-nav .nav-item > span { font-size: 1rem; line-height: 1; }.bottom-nav small { font-size: .57rem; font-weight: 700; }
   .welcome-panel { min-height: calc(100vh - 130px); padding: 38px 18px; border-radius: 19px; }
   .welcome-art { transform: scale(.83); margin-bottom: 2px; }
   .welcome-panel h2 { font-size: clamp(2.55rem, 13vw, 3.8rem); }

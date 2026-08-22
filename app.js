@@ -16,7 +16,7 @@ import {
   exploreLessonsForTerritory,
 } from "./explore-catalog.js";
 
-const APP_VERSION = "2.0.0";
+const APP_VERSION = "2.0.1";
 const main = document.querySelector("#main-content");
 const pageTitle = document.querySelector("#page-title");
 const pageEyebrow = document.querySelector("#page-eyebrow");

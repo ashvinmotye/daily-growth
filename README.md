@@ -19,6 +19,7 @@ Daily Growth is an installable, offline-first PWA for private personal-developme
 - IndexedDB storage, full JSON backup and merge-based restore
 - Removable content packs; progress reconnects if the same pack is re-imported
 - Responsive mobile layout, dark mode, adjustable text size and offline support
+- Settings in the top header beside the dark-mode toggle, keeping primary navigation focused on learning
 - A three-lesson original sample pack and a formal JSON Schema
 
 ## Run locally
