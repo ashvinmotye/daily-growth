@@ -7,8 +7,12 @@ Daily Growth is an installable, offline-first PWA for private personal-developme
 ## What is included
 
 - Daily lesson reader with action and reflection prompts
+- An editable Today’s Action field that keeps the lesson suggestion and completion checkbox
 - Selectable reading track with an independent remembered position for every content pack
 - Journey view with all imported lessons—future lessons are never locked
+- Explore: 12 Worlds, 60 territories and five focused days per territory
+- “Take Me Somewhere New” rotation that avoids recent/familiar topics and favours underexplored Worlds
+- Explore breadth, territory and self-rated recall analytics
 - Private journal connected to each lesson
 - XP, levels, completion progress and a gentle reading rhythm
 - Additive JSON imports with a preview of new, updated and unchanged lessons
@@ -52,7 +56,17 @@ Every pack and lesson needs a permanent ID. Import behaviour is additive:
 
 Use the content-pack selector above the lesson on **Today**, or choose a pack in the **Journey** filter. That pack becomes your current reading track. Daily Growth remembers a separate position for every pack, keeps Previous and Next inside the selected pack, and prepares the next unfinished lesson from that pack when you complete one.
 
+Completing a lesson moves to the next unfinished lesson and scrolls the new lesson to the top automatically.
+
 Selecting **All content packs** in Journey changes only the list view; it does not replace your current reading track. Overall XP, journal entries and Insights still combine activity from every imported pack.
+
+## Explore a World
+
+Open **Explore** to browse 12 broad Worlds and five territories within each World. A territory is a self-paced five-day journey; every day contains a short reading, a concrete action, a reflection and a simple recall check. Explore is a second lane alongside imported book/content packs, so starting a territory never changes the current content pack on Today.
+
+**Take Me Somewhere New** uses local progress only. It avoids recently studied territories, lowers the priority of areas with high completion/recall signals, and favours Worlds with less coverage. Insights explains breadth as Worlds entered and retention as the average of your own Revisit, Familiar and Remembered checks.
+
+The built-in Explore catalog is original app content. Explore progress, action notes, reflections, recall checks and rotation history are included in full backups.
 
 Use `sample-content-pack.json` as a readable example and `content-pack.schema.json` as the specification.
 

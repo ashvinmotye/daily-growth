@@ -9,8 +9,14 @@ import {
   saveReflection,
   saveSetting,
 } from "./db.js";
+import {
+  EXPLORE_WORLDS,
+  allExploreLessons,
+  allExploreTerritories,
+  exploreLessonsForTerritory,
+} from "./explore-catalog.js";
 
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "2.0.0";
 const main = document.querySelector("#main-content");
 const pageTitle = document.querySelector("#page-title");
 const pageEyebrow = document.querySelector("#page-eyebrow");
@@ -25,6 +31,10 @@ const confirmMessage = document.querySelector("#confirm-dialog-message");
 const confirmAccept = document.querySelector("#confirm-accept");
 const toastRegion = document.querySelector("#toast-region");
 const quickTheme = document.querySelector("#quick-theme");
+const exploreTerritories = allExploreTerritories();
+const exploreLessons = allExploreLessons();
+const exploreTerritoryById = new Map(exploreTerritories.map((item) => [item.id, item]));
+const exploreLessonById = new Map(exploreLessons.map((item) => [item.id, item]));
 
 const state = {
   packs: [],
@@ -39,6 +49,10 @@ const ui = {
   selectedLessonId: null,
   journeyPack: "all",
   journeySearch: "",
+  exploreWorldId: "",
+  exploreTerritoryId: "",
+  exploreDayIndex: 0,
+  exploreSuggestionReason: "",
   pendingImport: null,
   pendingBackup: null,
   confirmAction: null,
@@ -47,6 +61,7 @@ const ui = {
 const VIEW_META = {
   today: ["Today", "Your daily practice"],
   journey: ["Journey", "Every step, at your pace"],
+  explore: ["Explore", "Go beyond the familiar"],
   journal: ["Journal", "Thoughts worth returning to"],
   insights: ["Insights", "Notice how you are growing"],
   settings: ["Settings", "Make Daily Growth yours"],
@@ -122,6 +137,128 @@ function lessonsForPack(packId) {
   return orderedLessons().filter((lesson) => lesson.packId === packId);
 }
 
+function arraySetting(key) {
+  const value = getSetting(key);
+  return Array.isArray(value) ? value : [];
+}
+
+function startedTerritoryIds() {
+  const started = new Set(arraySetting("explore:startedTerritories"));
+  state.progress.forEach((item) => {
+    const lesson = exploreLessonById.get(item.lessonId);
+    if (lesson) started.add(lesson.territoryId);
+  });
+  state.reflections.forEach((item) => {
+    const lesson = exploreLessonById.get(item.lessonId);
+    if (lesson?.territoryId && item.text?.trim()) started.add(lesson.territoryId);
+  });
+  return started;
+}
+
+function allKnownLessons() {
+  return [...orderedLessons(), ...exploreLessons];
+}
+
+function activeLearningLessons() {
+  const started = startedTerritoryIds();
+  return [...orderedLessons(), ...exploreLessons.filter((lesson) => started.has(lesson.territoryId))];
+}
+
+function findLesson(lessonId) {
+  return state.lessons.find((item) => item.id === lessonId) || exploreLessonById.get(lessonId) || null;
+}
+
+function territoryStats(territoryId) {
+  const lessons = exploreLessonsForTerritory(exploreTerritoryById.get(territoryId));
+  const progress = progressMap();
+  const completed = lessons.filter((lesson) => progress.get(lesson.id)?.completedAt).length;
+  const ratings = lessons
+    .map((lesson) => progress.get(lesson.id)?.recallRating)
+    .filter((rating) => ["revisit", "familiar", "remembered"].includes(rating));
+  const ratingValue = { revisit: 30, familiar: 65, remembered: 100 };
+  const retention = ratings.length
+    ? Math.round(ratings.reduce((sum, rating) => sum + ratingValue[rating], 0) / ratings.length)
+    : null;
+  const currentIndex = lessons.findIndex((lesson) => !progress.get(lesson.id)?.completedAt);
+  return {
+    lessons,
+    completed,
+    percent: Math.round((completed / lessons.length) * 100),
+    currentIndex: currentIndex >= 0 ? currentIndex : lessons.length - 1,
+    finished: completed === lessons.length,
+    retention,
+    ratingCount: ratings.length,
+  };
+}
+
+function exploreAnalytics() {
+  const started = startedTerritoryIds();
+  const startedTerritories = exploreTerritories.filter((territory) => started.has(territory.id));
+  const worldsStarted = new Set(startedTerritories.map((territory) => territory.worldId));
+  const completedTerritories = startedTerritories.filter((territory) => territoryStats(territory.id).finished);
+  const rated = startedTerritories.flatMap((territory) => territoryStats(territory.id).lessons)
+    .map((lesson) => progressMap().get(lesson.id)?.recallRating)
+    .filter((rating) => ["revisit", "familiar", "remembered"].includes(rating));
+  const ratingValue = { revisit: 30, familiar: 65, remembered: 100 };
+  const retention = rated.length
+    ? Math.round(rated.reduce((sum, rating) => sum + ratingValue[rating], 0) / rated.length)
+    : null;
+  return {
+    started,
+    startedTerritories,
+    worldsStarted,
+    completedTerritories,
+    breadthPercent: Math.round((worldsStarted.size / EXPLORE_WORLDS.length) * 100),
+    retention,
+    ratedCount: rated.length,
+  };
+}
+
+function stableDailyNumber(value) {
+  let hash = 2166136261;
+  for (const character of value) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967295;
+}
+
+function chooseSomewhereNew() {
+  const analytics = exploreAnalytics();
+  const recent = arraySetting("explore:recentTerritories").slice(-8);
+  const worldStartedCount = new Map(EXPLORE_WORLDS.map((world) => [
+    world.id,
+    world.territories.filter(([territoryId]) => analytics.started.has(territoryId)).length,
+  ]));
+  const candidates = exploreTerritories.map((territory) => {
+    const stats = territoryStats(territory.id);
+    const recentIndex = recent.lastIndexOf(territory.id);
+    const recencyPenalty = recentIndex >= 0 ? 240 + recentIndex * 10 : 0;
+    const familiarityPenalty = (stats.retention ?? 0) * 0.7 + stats.completed * 14;
+    const novelty = analytics.started.has(territory.id) ? 0 : 150;
+    const breadth = 120 - (worldStartedCount.get(territory.worldId) || 0) * 24;
+    const dailyTieBreak = stableDailyNumber(`${localDateKey()}:${territory.id}`) * 12;
+    return { territory, score: novelty + breadth + dailyTieBreak - recencyPenalty - familiarityPenalty };
+  }).sort((a, b) => b.score - a.score);
+  const territory = candidates[0].territory;
+  const worldCount = worldStartedCount.get(territory.worldId) || 0;
+  const reason = worldCount === 0
+    ? `This opens an unvisited World: ${territory.worldTitle}.`
+    : analytics.started.has(territory.id)
+      ? `This returns to a less-familiar territory outside your recent rotation.`
+      : `This expands a lightly explored part of ${territory.worldTitle}.`;
+  return { territory, reason };
+}
+
+async function recordExploreTerritory(territoryId) {
+  const started = [...new Set([...arraySetting("explore:startedTerritories"), territoryId])];
+  const recent = arraySetting("explore:recentTerritories").filter((id) => id !== territoryId);
+  recent.push(territoryId);
+  await saveSetting("explore:startedTerritories", started);
+  await saveSetting("explore:recentTerritories", recent.slice(-12));
+  await saveSetting("explore:activeTerritoryId", territoryId);
+}
+
 function getActivePackId() {
   const packs = orderedPacks();
   const savedPackId = getSetting("activePackId");
@@ -167,7 +304,7 @@ async function selectActivePack(packId) {
   return pack;
 }
 
-function calculateStats(lessons = orderedLessons()) {
+function calculateStats(lessons = activeLearningLessons()) {
   const progress = progressMap();
   const reflections = reflectionMap();
   const completed = lessons.filter((lesson) => progress.get(lesson.id)?.completedAt);
@@ -355,7 +492,7 @@ function updateShell() {
   sidebarGrowth.innerHTML = `
     <div class="level-row"><span>Level ${stats.level}</span><strong>${stats.levelProgress}/100 XP</strong></div>
     <div class="mini-progress" aria-label="${stats.levelProgress}% to the next level"><span style="width:${stats.levelProgress}%"></span></div>
-    <p>${stats.total ? `${stats.completed} of ${stats.total} lessons complete` : "Import a pack to begin"}</p>
+    <p>${stats.total ? `${stats.completed} of ${stats.total} active lessons complete` : "Explore a World or import a pack"}</p>
   `;
 }
 
@@ -363,6 +500,7 @@ function render() {
   updateShell();
   if (ui.view === "today") renderToday();
   if (ui.view === "journey") renderJourney();
+  if (ui.view === "explore") renderExplore();
   if (ui.view === "journal") renderJournal();
   if (ui.view === "insights") renderInsights();
   if (ui.view === "settings") renderSettings();
@@ -381,6 +519,7 @@ function emptyLibraryMarkup() {
       <p class="welcome-copy">Import a content pack and begin a gentle daily rhythm: one lesson, one action and one honest reflection.</p>
       <div class="welcome-actions">
         <button class="button primary" data-action="import-pack"><span aria-hidden="true">＋</span> Import content pack</button>
+        <button class="button secondary" data-view="explore">Browse Explore Worlds</button>
         <button class="button secondary" data-action="load-sample">Try the 3-lesson sample</button>
       </div>
       <p class="privacy-line"><span aria-hidden="true">●</span> Your lessons and writing stay in this browser.</p>
@@ -428,6 +567,7 @@ function renderLesson(lesson, lessonIndex, lessons, cursorIndex, activePackId) {
   const packs = packMap();
   const progress = progressMap().get(lesson.id) || { lessonId: lesson.id };
   const savedReflection = reflectionMap().get(lesson.id)?.text || "";
+  const savedActionNote = progress.actionNote || "";
   const pack = packs.get(lesson.packId);
   const isComplete = Boolean(progress.completedAt);
   const actionComplete = Boolean(progress.actionCompletedAt);
@@ -471,7 +611,12 @@ function renderLesson(lesson, lessonIndex, lessons, cursorIndex, activePackId) {
           <div class="practice-number">01</div>
           <div class="practice-content">
             <p class="eyebrow">Today’s action</p>
-            <h3>${escapeHtml(lesson.action)}</h3>
+            <p class="action-suggestion"><strong>Suggested:</strong> ${escapeHtml(lesson.action)}</p>
+            <label class="action-input-label" for="action-note">What will you do?</label>
+            <div class="action-input-row">
+              <input id="action-note" type="text" maxlength="280" placeholder="Write your concrete action…" value="${escapeHtml(savedActionNote)}" />
+              <button class="button secondary small" data-action="save-action-note" data-lesson-id="${escapeHtml(lesson.id)}">Save</button>
+            </div>
             <button class="check-action" data-action="toggle-action" data-lesson-id="${escapeHtml(lesson.id)}" aria-pressed="${actionComplete}">
               <span class="check-box" aria-hidden="true">${actionComplete ? "✓" : ""}</span>
               ${actionComplete ? "Action completed" : "I did this today"}
@@ -609,8 +754,181 @@ function renderJourney() {
   `;
 }
 
+function renderExplore() {
+  if (ui.exploreTerritoryId && exploreTerritoryById.has(ui.exploreTerritoryId)) {
+    renderExploreTerritory(exploreTerritoryById.get(ui.exploreTerritoryId));
+    return;
+  }
+
+  const analytics = exploreAnalytics();
+  const activeTerritoryId = getSetting("explore:activeTerritoryId");
+  const activeTerritory = exploreTerritoryById.get(activeTerritoryId);
+  const activeStats = activeTerritory ? territoryStats(activeTerritory.id) : null;
+  const selectedWorld = EXPLORE_WORLDS.find((world) => world.id === ui.exploreWorldId);
+
+  main.innerHTML = `
+    <section class="explore-hero">
+      <div class="explore-hero-copy">
+        <p class="eyebrow">A second learning lane</p>
+        <h2>Follow curiosity<br><em>beyond the familiar.</em></h2>
+        <p>Explore 12 Worlds through focused five-day journeys. Each day takes about 5–10 minutes and ends with a small act of retrieval.</p>
+        <button class="button explore-surprise" data-action="surprise-me"><span aria-hidden="true">✦</span> Take Me Somewhere New</button>
+        <small>The suggestion avoids recent journeys and leans toward Worlds you know less well.</small>
+      </div>
+      <div class="explore-orbit" aria-hidden="true">
+        <span class="orbit-core">◇</span>
+        ${EXPLORE_WORLDS.slice(0, 6).map((world, index) => `<i style="--orbit-index:${index}">${world.symbol}</i>`).join("")}
+      </div>
+    </section>
+
+    <section class="explore-summary" aria-label="Explore progress">
+      <div><strong>${analytics.worldsStarted.size}<small>/12</small></strong><span>Worlds entered</span></div>
+      <div><strong>${analytics.startedTerritories.length}<small>/60</small></strong><span>Territories started</span></div>
+      <div><strong>${analytics.completedTerritories.length}</strong><span>Journeys completed</span></div>
+      <div><strong>${analytics.retention === null ? "—" : `${analytics.retention}%`}</strong><span>Recall signal</span></div>
+    </section>
+
+    ${activeTerritory && activeStats && !activeStats.finished ? `
+      <section class="explore-resume" style="--world-color:${escapeHtml(activeTerritory.color)}">
+        <span class="resume-symbol" aria-hidden="true">${activeTerritory.worldSymbol}</span>
+        <div><p class="eyebrow">Continue exploring</p><h3>${escapeHtml(activeTerritory.title)}</h3><span>Day ${activeStats.currentIndex + 1} of 5 · ${escapeHtml(activeTerritory.worldTitle)}</span></div>
+        <div class="resume-progress"><span style="width:${activeStats.percent}%"></span></div>
+        <button class="button secondary small" data-action="open-explore-territory" data-territory-id="${escapeHtml(activeTerritory.id)}">Resume →</button>
+      </section>
+    ` : ""}
+
+    <section class="world-browser">
+      <div class="section-heading"><div><p class="eyebrow">Browse Worlds</p><h2>Choose a direction</h2></div><span>5 territories in every World</span></div>
+      <div class="world-grid">
+        ${EXPLORE_WORLDS.map((world) => {
+          const worldStarted = world.territories.filter(([territoryId]) => analytics.started.has(territoryId)).length;
+          return `
+            <button class="world-card ${selectedWorld?.id === world.id ? "is-selected" : ""}" style="--world-color:${escapeHtml(world.color)}" data-action="select-world" data-world-id="${escapeHtml(world.id)}">
+              <span class="world-symbol" aria-hidden="true">${world.symbol}</span>
+              <small>${worldStarted}/5 explored</small>
+              <strong>${escapeHtml(world.title)}</strong>
+              <p>${escapeHtml(world.description)}</p>
+              <i aria-hidden="true">→</i>
+            </button>
+          `;
+        }).join("")}
+      </div>
+    </section>
+
+    ${selectedWorld ? `
+      <section class="territory-browser" id="territories">
+        <div class="territory-heading" style="--world-color:${escapeHtml(selectedWorld.color)}">
+          <span aria-hidden="true">${selectedWorld.symbol}</span>
+          <div><p class="eyebrow">${escapeHtml(selectedWorld.title)}</p><h2>Choose a five-day territory</h2><p>${escapeHtml(selectedWorld.description)}</p></div>
+        </div>
+        <div class="territory-grid">
+          ${selectedWorld.territories.map(([territoryId]) => {
+            const territory = exploreTerritoryById.get(territoryId);
+            const stats = territoryStats(territoryId);
+            const started = analytics.started.has(territoryId);
+            return `
+              <button class="territory-card ${stats.finished ? "is-complete" : ""}" data-action="open-explore-territory" data-territory-id="${escapeHtml(territoryId)}">
+                <div class="territory-card-top"><span>${stats.finished ? "✓" : started ? `${stats.completed}/5` : "5 days"}</span><small>5–10 min/day</small></div>
+                <strong>${escapeHtml(territory.title)}</strong>
+                <p>${escapeHtml(territory.description)}</p>
+                <div class="territory-progress"><span style="width:${stats.percent}%;background:${escapeHtml(territory.color)}"></span></div>
+                <b>${stats.finished ? "Revisit" : started ? "Continue" : "Preview"} →</b>
+              </button>
+            `;
+          }).join("")}
+        </div>
+      </section>
+    ` : ""}
+  `;
+}
+
+function renderExploreTerritory(territory) {
+  const analytics = exploreAnalytics();
+  const stats = territoryStats(territory.id);
+  const started = analytics.started.has(territory.id);
+  const safeDayIndex = Math.max(0, Math.min(4, Number(ui.exploreDayIndex) || 0));
+  const lesson = stats.lessons[safeDayIndex];
+  const progress = progressMap().get(lesson.id) || { lessonId: lesson.id };
+  const savedReflection = reflectionMap().get(lesson.id)?.text || "";
+  const savedActionNote = progress.actionNote || "";
+  const isComplete = Boolean(progress.completedAt);
+  const actionComplete = Boolean(progress.actionCompletedAt);
+  const recallRating = progress.recallRating || "";
+
+  main.innerHTML = `
+    <button class="back-to-explore" data-action="back-explore">← Back to all Worlds</button>
+    ${ui.exploreSuggestionReason ? `<section class="suggestion-reason"><span aria-hidden="true">✦</span><div><strong>Why this journey?</strong><p>${escapeHtml(ui.exploreSuggestionReason)}</p></div></section>` : ""}
+    <section class="territory-hero" style="--world-color:${escapeHtml(territory.color)}">
+      <div><p class="eyebrow">${escapeHtml(territory.worldTitle)}</p><h2>${escapeHtml(territory.title)}</h2><p>${escapeHtml(territory.description)}</p></div>
+      <div class="territory-hero-meta"><span>${territory.worldSymbol}</span><strong>5 days</strong><small>5–10 minutes per day</small></div>
+    </section>
+
+    <nav class="explore-day-nav" aria-label="Journey days">
+      ${stats.lessons.map((day, index) => {
+        const dayProgress = progressMap().get(day.id);
+        const done = Boolean(dayProgress?.completedAt);
+        return `<button class="${index === safeDayIndex ? "is-active" : ""} ${done ? "is-complete" : ""}" data-action="open-explore-day" data-day-index="${index}"><span>${done ? "✓" : index + 1}</span><small>Day ${index + 1}</small><strong>${escapeHtml(day.exploreDayLabel)}</strong></button>`;
+      }).join("")}
+    </nav>
+
+    ${!started ? `
+      <section class="explore-preview">
+        <div><p class="eyebrow">Your route</p><h2>Five small steps into ${escapeHtml(territory.title)}</h2><p>You can read every day at your own pace. Starting adds this territory to your Explore path and makes Day 1 your current session.</p></div>
+        <ol>${stats.lessons.map((day, index) => `<li><span>0${index + 1}</span><div><strong>${escapeHtml(day.exploreDayLabel)}</strong><small>${escapeHtml(day.title)}</small></div></li>`).join("")}</ol>
+        <button class="button primary" data-action="start-territory" data-territory-id="${escapeHtml(territory.id)}">Begin this journey <span>→</span></button>
+      </section>
+    ` : `
+      <section class="explore-lesson-layout">
+        <div class="lesson-column">
+          <article class="lesson-paper explore-paper ${isComplete ? "is-complete" : ""}">
+            <div class="paper-accent" style="--pack-color:${escapeHtml(territory.color)}"></div>
+            <div class="lesson-meta"><span>Day ${safeDayIndex + 1} of 5</span><span class="meta-dot">•</span><span>${escapeHtml(lesson.exploreDayLabel)}</span></div>
+            <h2>${escapeHtml(lesson.title)}</h2>
+            <p class="lesson-summary">${escapeHtml(lesson.summary)}</p>
+            <section class="lesson-section why-section"><span class="section-symbol" aria-hidden="true">◎</span><div><h3>Why it matters</h3><p>${escapeHtml(lesson.whyItMatters)}</p></div></section>
+            <section class="lesson-section example-section"><span class="section-symbol" aria-hidden="true">◇</span><div><h3>Look for this</h3><p>${escapeHtml(lesson.example)}</p></div></section>
+            <div class="tag-row">${lesson.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>
+          </article>
+
+          <section class="practice-card action-card ${actionComplete ? "is-done" : ""}">
+            <div class="practice-number">01</div>
+            <div class="practice-content">
+              <p class="eyebrow">Today’s action</p>
+              <p class="action-suggestion"><strong>Suggested:</strong> ${escapeHtml(lesson.action)}</p>
+              <label class="action-input-label" for="action-note">What will you do?</label>
+              <div class="action-input-row"><input id="action-note" type="text" maxlength="280" placeholder="Write your concrete action…" value="${escapeHtml(savedActionNote)}" /><button class="button secondary small" data-action="save-action-note" data-lesson-id="${escapeHtml(lesson.id)}">Save</button></div>
+              <button class="check-action" data-action="toggle-action" data-lesson-id="${escapeHtml(lesson.id)}" aria-pressed="${actionComplete}"><span class="check-box" aria-hidden="true">${actionComplete ? "✓" : ""}</span>${actionComplete ? "Action completed" : "I did this today"}<small>+10 XP</small></button>
+            </div>
+          </section>
+
+          <section class="practice-card reflection-card">
+            <div class="practice-number">02</div>
+            <div class="practice-content"><p class="eyebrow">Pause &amp; reflect</p><h3>${escapeHtml(lesson.reflection)}</h3><label class="sr-only" for="reflection-text">Your reflection</label><textarea id="reflection-text" rows="5" placeholder="Write what comes to mind…">${escapeHtml(savedReflection)}</textarea><div class="reflection-footer"><span>Your words stay on this device.</span><button class="button secondary small" data-action="save-reflection" data-lesson-id="${escapeHtml(lesson.id)}">Save reflection <small>+5 XP</small></button></div></div>
+          </section>
+
+          <section class="recall-card">
+            <div><p class="eyebrow">Memory check</p><h3>Without looking back, how available is today’s idea?</h3><p>This is a signal, not a grade. It helps Explore rotate toward areas that need more attention.</p></div>
+            <div class="recall-options" role="group" aria-label="Recall rating">
+              ${[["revisit", "↻", "Revisit"], ["familiar", "~", "Familiar"], ["remembered", "✓", "Remembered"]].map(([value, icon, label]) => `<button class="${recallRating === value ? "is-active" : ""}" data-action="rate-recall" data-lesson-id="${escapeHtml(lesson.id)}" data-rating="${value}"><span>${icon}</span><strong>${label}</strong></button>`).join("")}
+            </div>
+          </section>
+
+          <div class="lesson-completion">
+            <button class="button ${isComplete ? "completed" : "primary"} complete-button" data-action="complete-explore-day" data-lesson-id="${escapeHtml(lesson.id)}" ${isComplete ? "disabled" : ""}><span aria-hidden="true">${isComplete ? "✓" : "✦"}</span>${isComplete ? `Completed ${formatDate(progress.completedAt, { month: "short", day: "numeric" })}` : safeDayIndex < 4 ? "Complete & continue" : "Complete territory"}${isComplete ? "" : "<small>+10 XP</small>"}</button>
+            <p>${stats.finished ? "This territory is now part of your wider map." : "Small retrievals turn exposure into usable knowledge."}</p>
+          </div>
+        </div>
+
+        <aside class="explore-aside">
+          <section class="explore-progress-card" style="--world-color:${escapeHtml(territory.color)}"><p class="eyebrow">Territory progress</p><strong>${stats.completed}<small>/5 days</small></strong><div class="territory-progress"><span style="width:${stats.percent}%"></span></div><dl><div><dt>Recall</dt><dd>${stats.retention === null ? "—" : `${stats.retention}%`}</dd></div><div><dt>World</dt><dd>${EXPLORE_WORLDS.findIndex((world) => world.id === territory.worldId) + 1}/12</dd></div></dl>${stats.finished ? `<button class="button secondary small" data-action="surprise-me">Find another World</button>` : ""}</section>
+        </aside>
+      </section>
+    `}
+  `;
+}
+
 function renderJournal() {
-  const lessons = orderedLessons();
+  const lessons = allKnownLessons();
   const lessonById = new Map(lessons.map((item, index) => [item.id, { ...item, globalIndex: index }]));
   const entries = [...state.reflections]
     .filter((item) => item.text?.trim() && lessonById.has(item.lessonId))
@@ -627,7 +945,7 @@ function renderJournal() {
           const lesson = lessonById.get(entry.lessonId);
           return `
             <article class="journal-entry">
-              <div class="journal-entry-head"><span>Day ${lesson.globalIndex + 1}</span><time>${formatDate(entry.updatedAt)}</time></div>
+              <div class="journal-entry-head"><span>${lesson.explore ? `Explore · Day ${lesson.order}` : `Day ${lesson.globalIndex + 1}`}</span><time>${formatDate(entry.updatedAt)}</time></div>
               <h3>${escapeHtml(lesson.reflection)}</h3>
               <p>${escapeHtml(entry.text)}</p>
               <button class="text-button" data-action="open-lesson" data-lesson-id="${escapeHtml(lesson.id)}">Return to “${escapeHtml(lesson.title)}” <span>→</span></button>
@@ -648,9 +966,11 @@ function renderJournal() {
 
 function renderInsights() {
   const stats = calculateStats();
-  const lessons = orderedLessons();
+  const lessons = activeLearningLessons();
+  const bookLessons = orderedLessons();
   const progress = progressMap();
   const packs = orderedPacks();
+  const explore = exploreAnalytics();
   const days = [];
   for (let offset = 13; offset >= 0; offset -= 1) {
     const date = new Date();
@@ -658,16 +978,11 @@ function renderInsights() {
     days.push({ key: localDateKey(date), label: new Intl.DateTimeFormat(undefined, { weekday: "narrow" }).format(date) });
   }
 
-  if (!lessons.length) {
-    main.innerHTML = emptyLibraryMarkup();
-    return;
-  }
-
   main.innerHTML = `
     <section class="insight-grid">
       <article class="stat-card feature-stat"><span class="stat-symbol" aria-hidden="true">✦</span><small>Current level</small><strong>${stats.level}</strong><p>${100 - stats.levelProgress} XP to Level ${stats.level + 1}</p><div class="mini-progress"><span style="width:${stats.levelProgress}%"></span></div></article>
       <article class="stat-card"><span class="stat-symbol warm" aria-hidden="true">☀</span><small>Reading rhythm</small><strong>${stats.streak}</strong><p>${stats.streak === 1 ? "day" : "days"} in your current rhythm</p></article>
-      <article class="stat-card"><span class="stat-symbol coral" aria-hidden="true">✓</span><small>Lessons complete</small><strong>${stats.completed}</strong><p>${stats.completionPercent}% of ${stats.total} lessons</p></article>
+      <article class="stat-card"><span class="stat-symbol coral" aria-hidden="true">✓</span><small>Lessons complete</small><strong>${stats.completed}</strong><p>${stats.total ? `${stats.completionPercent}% of ${stats.total} active lessons` : "Start a lesson or territory"}</p></article>
       <article class="stat-card"><span class="stat-symbol lilac" aria-hidden="true">✎</span><small>Reflections saved</small><strong>${stats.reflectionCount}</strong><p>Thoughts you can revisit</p></article>
     </section>
 
@@ -679,15 +994,32 @@ function renderInsights() {
       <p class="gentle-note">A quiet day does not erase your progress. Return when you can.</p>
     </section>
 
+    <section class="explore-insights-panel">
+      <div class="section-heading"><div><p class="eyebrow">Explore</p><h2>Breadth &amp; retention</h2></div><button class="button secondary small" data-view="explore">Open Explore →</button></div>
+      <div class="explore-insight-summary">
+        <article><span aria-hidden="true">◇</span><div><small>Breadth</small><strong>${explore.breadthPercent}%</strong><p>${explore.worldsStarted.size} of 12 Worlds entered</p></div></article>
+        <article><span aria-hidden="true">◎</span><div><small>Recall signal</small><strong>${explore.retention === null ? "—" : `${explore.retention}%`}</strong><p>${explore.ratedCount ? `${explore.ratedCount} memory ${explore.ratedCount === 1 ? "check" : "checks"}` : "Rate recall after an Explore day"}</p></div></article>
+        <article><span aria-hidden="true">✓</span><div><small>Territories</small><strong>${explore.completedTerritories.length}<small> complete</small></strong><p>${explore.startedTerritories.length} of 60 started</p></div></article>
+      </div>
+      <div class="world-coverage-list">
+        ${EXPLORE_WORLDS.map((world) => {
+          const started = world.territories.filter(([territoryId]) => explore.started.has(territoryId)).length;
+          const completed = world.territories.filter(([territoryId]) => territoryStats(territoryId).finished).length;
+          return `<button data-action="view-insight-world" data-world-id="${escapeHtml(world.id)}"><span class="pack-dot" style="background:${escapeHtml(world.color)}"></span><div><strong>${escapeHtml(world.title)}</strong><small>${completed} complete · ${started}/5 entered</small><div class="pack-bar"><span style="width:${started * 20}%;background:${escapeHtml(world.color)}"></span></div></div><b>${started * 20}%</b></button>`;
+        }).join("")}
+      </div>
+      <p class="gentle-note">Breadth rewards entering different Worlds. Recall is based only on your own Revisit, Familiar and Remembered checks—not a test score.</p>
+    </section>
+
     <section class="pack-progress-panel">
       <div class="section-heading"><div><p class="eyebrow">Content packs</p><h2>Growth by collection</h2></div></div>
       <div class="pack-progress-list">
-        ${packs.map((pack) => {
-          const packLessons = lessons.filter((lesson) => lesson.packId === pack.id);
+        ${packs.length ? packs.map((pack) => {
+          const packLessons = bookLessons.filter((lesson) => lesson.packId === pack.id);
           const done = packLessons.filter((lesson) => progress.get(lesson.id)?.completedAt).length;
           const percent = packLessons.length ? Math.round((done / packLessons.length) * 100) : 0;
           return `<div class="pack-progress-item"><span class="pack-dot" style="background:${escapeHtml(pack.color)}"></span><div><div><strong>${escapeHtml(pack.title)}</strong><span>${done}/${packLessons.length}</span></div><div class="pack-bar"><span style="width:${percent}%;background:${escapeHtml(pack.color)}"></span></div></div><b>${percent}%</b></div>`;
-        }).join("")}
+        }).join("") : `<div class="inline-empty"><p>No imported content packs yet. Explore remains ready whenever curiosity strikes.</p><button class="text-button" data-view="explore">Browse Worlds →</button></div>`}
       </div>
     </section>
   `;
@@ -741,7 +1073,7 @@ function renderSettings() {
       <section class="settings-section">
         <div class="settings-heading"><span aria-hidden="true">⇄</span><div><h2>Backup &amp; transfer</h2><p>Move your library, progress and reflections between devices.</p></div></div>
         <div class="data-actions">
-          <button class="data-action" data-action="export-backup"><span aria-hidden="true">↓</span><div><strong>Export full backup</strong><small>Content, progress, journal and settings</small></div></button>
+          <button class="data-action" data-action="export-backup"><span aria-hidden="true">↓</span><div><strong>Export full backup</strong><small>Content, Explore, progress, journal and settings</small></div></button>
           <button class="data-action" data-action="restore-backup"><span aria-hidden="true">↑</span><div><strong>Restore a backup</strong><small>Merges records using their permanent IDs</small></div></button>
         </div>
       </section>
@@ -914,8 +1246,85 @@ async function handleAction(button) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  if (action === "select-world") {
+    ui.exploreWorldId = button.dataset.worldId;
+    ui.exploreTerritoryId = "";
+    ui.exploreSuggestionReason = "";
+    renderExplore();
+    requestAnimationFrame(() => document.querySelector("#territories")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  if (action === "open-explore-territory") {
+    const territory = exploreTerritoryById.get(button.dataset.territoryId);
+    if (!territory) return;
+    ui.exploreTerritoryId = territory.id;
+    ui.exploreWorldId = territory.worldId;
+    ui.exploreSuggestionReason = "";
+    ui.exploreDayIndex = territoryStats(territory.id).currentIndex;
+    ui.view = "explore";
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  if (action === "back-explore") {
+    ui.exploreTerritoryId = "";
+    ui.exploreSuggestionReason = "";
+    renderExplore();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  if (action === "surprise-me") {
+    const suggestion = chooseSomewhereNew();
+    ui.view = "explore";
+    ui.exploreWorldId = suggestion.territory.worldId;
+    ui.exploreTerritoryId = suggestion.territory.id;
+    ui.exploreDayIndex = territoryStats(suggestion.territory.id).currentIndex;
+    ui.exploreSuggestionReason = suggestion.reason;
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  if (action === "start-territory") {
+    const territory = exploreTerritoryById.get(button.dataset.territoryId);
+    if (!territory) return;
+    await recordExploreTerritory(territory.id);
+    await refreshState();
+    ui.exploreTerritoryId = territory.id;
+    ui.exploreDayIndex = 0;
+    ui.exploreSuggestionReason = "";
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    showToast(`${territory.title} added to your Explore path.`);
+  }
+
+  if (action === "open-explore-day") {
+    ui.exploreDayIndex = Number(button.dataset.dayIndex) || 0;
+    renderExplore();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  if (action === "view-insight-world") {
+    ui.view = "explore";
+    ui.exploreWorldId = button.dataset.worldId;
+    ui.exploreTerritoryId = "";
+    ui.exploreSuggestionReason = "";
+    render();
+    requestAnimationFrame(() => document.querySelector("#territories")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
   if (action === "open-lesson") {
     const lessonId = button.dataset.lessonId;
+    const exploreLesson = exploreLessonById.get(lessonId);
+    if (exploreLesson) {
+      ui.view = "explore";
+      ui.exploreWorldId = exploreLesson.worldId;
+      ui.exploreTerritoryId = exploreLesson.territoryId;
+      ui.exploreDayIndex = exploreLesson.order - 1;
+      ui.exploreSuggestionReason = "";
+      render();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     if (!await rememberLesson(lessonId)) return;
     ui.view = "today";
     render();
@@ -942,7 +1351,8 @@ async function handleAction(button) {
     const lesson = state.lessons.find((item) => item.id === lessonId);
     if (!lesson) return;
     const existing = progressMap().get(lessonId) || { lessonId };
-    await saveProgress({ ...existing, completedAt: new Date().toISOString() });
+    const actionNote = document.querySelector("#action-note")?.value.trim() ?? existing.actionNote ?? "";
+    await saveProgress({ ...existing, actionNote, completedAt: new Date().toISOString() });
     const packLessons = lessonsForPack(lesson.packId);
     const lessonIndex = packLessons.findIndex((item) => item.id === lessonId);
     const progress = progressMap();
@@ -956,18 +1366,56 @@ async function handleAction(button) {
     await refreshState();
     ui.selectedLessonId = nextLesson?.id || lesson.id;
     render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
     celebrate();
     showToast(nextLesson ? "Lesson completed. Your next lesson is ready. +10 XP" : "Content pack completed. +10 XP");
+  }
+
+  if (action === "complete-explore-day") {
+    const lesson = exploreLessonById.get(button.dataset.lessonId);
+    if (!lesson) return;
+    const existing = progressMap().get(lesson.id) || { lessonId: lesson.id };
+    const actionNote = document.querySelector("#action-note")?.value.trim() ?? existing.actionNote ?? "";
+    await saveProgress({ ...existing, actionNote, completedAt: new Date().toISOString() });
+    await recordExploreTerritory(lesson.territoryId);
+    await refreshState();
+    const updatedStats = territoryStats(lesson.territoryId);
+    const nextIndex = updatedStats.finished ? lesson.order - 1 : updatedStats.currentIndex;
+    ui.exploreDayIndex = nextIndex;
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    celebrate();
+    showToast(updatedStats.finished ? "Territory completed. Your map is wider. +10 XP" : "Explore day completed. The next step is ready. +10 XP");
+  }
+
+  if (action === "rate-recall") {
+    const lessonId = button.dataset.lessonId;
+    const existing = progressMap().get(lessonId) || { lessonId };
+    await saveProgress({ ...existing, recallRating: button.dataset.rating, recallRatedAt: new Date().toISOString() });
+    await refreshState();
+    render();
+    showToast("Memory check saved.");
   }
 
   if (action === "toggle-action") {
     const lessonId = button.dataset.lessonId;
     const existing = progressMap().get(lessonId) || { lessonId };
     const wasComplete = Boolean(existing.actionCompletedAt);
-    await saveProgress({ ...existing, actionCompletedAt: wasComplete ? null : new Date().toISOString() });
+    const actionNote = document.querySelector("#action-note")?.value.trim() ?? existing.actionNote ?? "";
+    await saveProgress({ ...existing, actionNote, actionCompletedAt: wasComplete ? null : new Date().toISOString() });
     await refreshState();
     render();
     showToast(wasComplete ? "Action marked as not complete." : "Action completed. +10 XP");
+  }
+
+  if (action === "save-action-note") {
+    const lessonId = button.dataset.lessonId;
+    const existing = progressMap().get(lessonId) || { lessonId };
+    const actionNote = document.querySelector("#action-note")?.value.trim() || "";
+    await saveProgress({ ...existing, actionNote });
+    await refreshState();
+    updateShell();
+    showToast(actionNote ? "Today’s action saved." : "Today’s action cleared.");
   }
 
   if (action === "save-reflection") {
@@ -1028,7 +1476,7 @@ async function handleAction(button) {
   if (action === "clear-all") {
     showConfirm(
       "Erase all local data?",
-      "This removes content packs, progress, reflections and settings from this browser. This cannot be undone without a backup.",
+      "This removes content packs, Explore progress, reflections and settings from this browser. This cannot be undone without a backup.",
       "Erase everything",
       async () => {
         await clearAllData();
@@ -1048,6 +1496,10 @@ document.addEventListener("click", async (event) => {
   if (viewButton) {
     ui.view = viewButton.dataset.view;
     ui.selectedLessonId = null;
+    if (ui.view === "explore") {
+      ui.exploreTerritoryId = "";
+      ui.exploreSuggestionReason = "";
+    }
     render();
     window.scrollTo({ top: 0, behavior: "smooth" });
     return;
