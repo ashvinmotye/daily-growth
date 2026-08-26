@@ -10,13 +10,19 @@ import {
   saveSetting,
 } from "./db.js";
 import {
+  getDailyGrowthCloudState,
+  initializeDailyGrowthCloud,
+  signOutDailyGrowth,
+  syncDailyGrowthNow,
+} from "./cloud.js";
+import {
   EXPLORE_WORLDS,
   allExploreLessons,
   allExploreTerritories,
   exploreLessonsForTerritory,
 } from "./explore-catalog.js";
 
-const APP_VERSION = "2.0.1";
+const APP_VERSION = "2.1.0";
 const main = document.querySelector("#main-content");
 const pageTitle = document.querySelector("#page-title");
 const pageEyebrow = document.querySelector("#page-eyebrow");
@@ -31,6 +37,7 @@ const confirmMessage = document.querySelector("#confirm-dialog-message");
 const confirmAccept = document.querySelector("#confirm-accept");
 const toastRegion = document.querySelector("#toast-region");
 const quickTheme = document.querySelector("#quick-theme");
+const cloudSidebarStatus = document.querySelector("#cloud-sidebar-status");
 const exploreTerritories = allExploreTerritories();
 const exploreLessons = allExploreLessons();
 const exploreTerritoryById = new Map(exploreTerritories.map((item) => [item.id, item]));
@@ -937,7 +944,7 @@ function renderJournal() {
   main.innerHTML = `
     <section class="journal-intro">
       <div class="journal-mark" aria-hidden="true">✎</div>
-      <div><h2>Your private thinking space</h2><p>Every reflection is saved on this device and connected to the lesson that prompted it.</p></div>
+      <div><h2>Your private thinking space</h2><p>Every reflection is saved offline, synced privately and connected to the lesson that prompted it.</p></div>
     </section>
     ${entries.length ? `
       <section class="journal-grid">
@@ -1031,9 +1038,25 @@ function renderSettings() {
   const packs = orderedPacks();
   const lessons = orderedLessons();
   const activePackId = getActivePackId();
+  const cloud = getDailyGrowthCloudState();
+  const queuedLabel = cloud.queuedChanges
+    ? `${cloud.status} · ${cloud.queuedChanges} ${cloud.queuedChanges === 1 ? "change" : "changes"} waiting`
+    : cloud.status;
 
   main.innerHTML = `
     <div class="settings-grid">
+      <section class="settings-section account-settings-section">
+        <div class="settings-heading"><span aria-hidden="true">☁</span><div><h2>Account &amp; sync</h2><p>Uses the same Supabase account and project as Forge and Level90.</p></div><strong class="cloud-heading-status ${cloud.connection === "Connected" ? "" : "is-offline"}">${escapeHtml(cloud.connection)}</strong></div>
+        <div class="account-summary-row">
+          <div><small>Signed in as</small><strong>${escapeHtml(cloud.email || "—")}</strong></div>
+          <button class="button ghost small" data-action="sign-out" ${cloud.busy ? "disabled" : ""}>Sign out</button>
+        </div>
+        <div class="cloud-sync-row">
+          <div><strong>Daily Growth data</strong><span class="is-${escapeHtml(cloud.tone || "waiting")}">${escapeHtml(queuedLabel)}</span><small>Content packs, reading positions, Explore progress, actions, recall checks, reflections and settings sync automatically.</small></div>
+          <button class="button secondary small" data-action="sync-now" ${cloud.busy || cloud.connection !== "Connected" ? "disabled" : ""}>${cloud.busy ? "Syncing…" : "Sync now"}</button>
+        </div>
+      </section>
+
       <section class="settings-section">
         <div class="settings-heading"><span aria-hidden="true">◐</span><div><h2>Appearance</h2><p>Choose a reading experience that feels comfortable.</p></div></div>
         <div class="setting-row">
@@ -1079,12 +1102,12 @@ function renderSettings() {
       </section>
 
       <section class="settings-section danger-zone">
-        <div class="settings-heading"><span aria-hidden="true">!</span><div><h2>Reset this device</h2><p>Export a backup first if you may want your data later.</p></div><button class="button danger-outline small" data-action="clear-all">Erase all local data</button></div>
+        <div class="settings-heading"><span aria-hidden="true">!</span><div><h2>Reset Daily Growth</h2><p>Export a backup first. This reset syncs to your other signed-in devices.</p></div><button class="button danger-outline small" data-action="clear-all">Erase all data</button></div>
       </section>
 
       <section class="independent-note">
-        <strong>Independent by design.</strong>
-        <p>Daily Growth is a private, local-first learning tool. No third-party book content is bundled with this app, and imported content stays on your device.</p>
+        <strong>Private and local-first.</strong>
+        <p>No third-party book content is bundled with the app. Your imported content and learning history are stored locally for offline use and in your protected Supabase account for sync.</p>
         <small>Daily Growth v${APP_VERSION}</small>
       </section>
     </div>
@@ -1213,6 +1236,14 @@ function downloadJson(filename, payload) {
 async function handleAction(button) {
   const action = button.dataset.action;
   if (!action) return;
+
+  if (action === "sync-now") {
+    await syncDailyGrowthNow();
+  }
+
+  if (action === "sign-out") {
+    await signOutDailyGrowth();
+  }
 
   if (action === "import-pack") contentInput.click();
   if (action === "restore-backup") backupInput.click();
@@ -1435,6 +1466,15 @@ async function handleAction(button) {
     render();
   }
 
+  if (action === "sync-now") {
+    const synced = await syncDailyGrowthNow();
+    if (synced) showToast("Daily Growth is synced.");
+  }
+
+  if (action === "sign-out") {
+    await signOutDailyGrowth();
+  }
+
   if (action === "export-backup") {
     const backup = {
       type: "daily-growth-backup",
@@ -1475,8 +1515,8 @@ async function handleAction(button) {
 
   if (action === "clear-all") {
     showConfirm(
-      "Erase all local data?",
-      "This removes content packs, Explore progress, reflections and settings from this browser. This cannot be undone without a backup.",
+      "Erase all Daily Growth data?",
+      "This removes content packs, Explore progress, reflections and settings from this device and syncs the reset to your account. This cannot be undone without a backup.",
       "Erase everything",
       async () => {
         await clearAllData();
@@ -1485,7 +1525,7 @@ async function handleAction(button) {
         ui.selectedLessonId = null;
         applyAppearance();
         render();
-        showToast("Local Daily Growth data erased.");
+        showToast("Daily Growth data erased. The reset will sync automatically.");
       },
     );
   }
@@ -1586,6 +1626,27 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
   if (getSetting("theme") === "system") applyAppearance();
 });
 
+function updateCloudChrome() {
+  if (!cloudSidebarStatus) return;
+  const cloud = getDailyGrowthCloudState();
+  const label = cloud.connection === "Connected"
+    ? (cloud.queuedChanges ? "Private · syncing changes" : "Private · synced")
+    : "Private · offline ready";
+  cloudSidebarStatus.innerHTML = `<span aria-hidden="true">●</span> ${escapeHtml(label)}`;
+  cloudSidebarStatus.title = cloud.status;
+}
+
+window.addEventListener("daily-growth:cloud-state", () => {
+  updateCloudChrome();
+  if (ui.view === "settings") renderSettings();
+});
+
+window.addEventListener("daily-growth:cloud-data", async () => {
+  await refreshState();
+  applyAppearance();
+  render();
+});
+
 async function initialize() {
   try {
     if (!("indexedDB" in window)) throw new Error("This browser does not support the local storage Daily Growth needs.");
@@ -1593,6 +1654,8 @@ async function initialize() {
     await refreshState();
     applyAppearance();
     render();
+    updateCloudChrome();
+    await initializeDailyGrowthCloud();
 
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
       navigator.serviceWorker.register("./sw.js").catch((error) => console.warn("Service worker registration failed", error));

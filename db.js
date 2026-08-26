@@ -1,3 +1,5 @@
+import { DAILY_GROWTH_STORE_KEYS, recordIdFor, snapshotToCloudRecords } from "./sync-logic.js";
+
 const DB_NAME = "daily-growth-db";
 const DB_VERSION = 1;
 
@@ -10,6 +12,24 @@ const STORES = {
 };
 
 let dbPromise;
+
+function notifyLocalChanges(operations) {
+  if (typeof window === "undefined" || !operations?.length) return;
+  window.dispatchEvent(new CustomEvent("daily-growth:local-change", { detail: { operations } }));
+}
+
+function upsertOperation(storeName, payload) {
+  return {
+    storeName,
+    recordId: recordIdFor(storeName, payload),
+    payload,
+    deleted: false,
+  };
+}
+
+function deleteOperation(storeName, recordId) {
+  return { storeName, recordId: String(recordId), payload: null, deleted: true };
+}
 
 function requestResult(request) {
   return new Promise((resolve, reject) => {
@@ -90,6 +110,10 @@ export async function importContentPack(pack, lessons) {
   packStore.put(pack);
   lessons.forEach((lesson) => lessonStore.put(lesson));
   await transactionDone(transaction);
+  notifyLocalChanges([
+    upsertOperation(STORES.packs, pack),
+    ...lessons.map((lesson) => upsertOperation(STORES.lessons, lesson)),
+  ]);
 }
 
 export async function saveProgress(progress) {
@@ -97,6 +121,7 @@ export async function saveProgress(progress) {
   const transaction = db.transaction(STORES.progress, "readwrite");
   transaction.objectStore(STORES.progress).put(progress);
   await transactionDone(transaction);
+  notifyLocalChanges([upsertOperation(STORES.progress, progress)]);
 }
 
 export async function saveReflection(reflection) {
@@ -104,17 +129,25 @@ export async function saveReflection(reflection) {
   const transaction = db.transaction(STORES.reflections, "readwrite");
   const store = transaction.objectStore(STORES.reflections);
 
-  if (reflection.text.trim()) store.put(reflection);
+  const hasText = Boolean(reflection.text.trim());
+  if (hasText) store.put(reflection);
   else store.delete(reflection.lessonId);
 
   await transactionDone(transaction);
+  notifyLocalChanges([
+    hasText
+      ? upsertOperation(STORES.reflections, reflection)
+      : deleteOperation(STORES.reflections, reflection.lessonId),
+  ]);
 }
 
 export async function saveSetting(key, value) {
   const db = await openDatabase();
   const transaction = db.transaction(STORES.settings, "readwrite");
-  transaction.objectStore(STORES.settings).put({ key, value });
+  const setting = { key, value };
+  transaction.objectStore(STORES.settings).put(setting);
   await transactionDone(transaction);
+  notifyLocalChanges([upsertOperation(STORES.settings, setting)]);
 }
 
 export async function removePackContent(packId) {
@@ -123,6 +156,7 @@ export async function removePackContent(packId) {
   const packStore = transaction.objectStore(STORES.packs);
   const lessonStore = transaction.objectStore(STORES.lessons);
   const index = lessonStore.index("packId");
+  const removedLessonIds = [];
 
   packStore.delete(packId);
 
@@ -134,6 +168,7 @@ export async function removePackContent(packId) {
         resolve();
         return;
       }
+      removedLessonIds.push(String(cursor.primaryKey));
       lessonStore.delete(cursor.primaryKey);
       cursor.continue();
     };
@@ -141,6 +176,10 @@ export async function removePackContent(packId) {
   });
 
   await transactionDone(transaction);
+  notifyLocalChanges([
+    deleteOperation(STORES.packs, packId),
+    ...removedLessonIds.map((lessonId) => deleteOperation(STORES.lessons, lessonId)),
+  ]);
 }
 
 export async function mergeBackup(backup) {
@@ -154,12 +193,33 @@ export async function mergeBackup(backup) {
   backup.settings.forEach((item) => transaction.objectStore(STORES.settings).put(item));
 
   await transactionDone(transaction);
+  notifyLocalChanges(snapshotToCloudRecords(backup));
 }
 
 export async function clearAllData() {
+  const snapshot = await getSnapshot();
   const db = await openDatabase();
   const transaction = db.transaction(Object.values(STORES), "readwrite");
   Object.values(STORES).forEach((storeName) => transaction.objectStore(storeName).clear());
+  await transactionDone(transaction);
+  notifyLocalChanges(snapshotToCloudRecords(snapshot).map((record) => deleteOperation(record.storeName, record.recordId)));
+}
+
+export async function applyCloudRecords(records) {
+  const validRecords = (Array.isArray(records) ? records : []).filter((record) => {
+    return DAILY_GROWTH_STORE_KEYS[record.storeName] && record.recordId;
+  });
+  if (!validRecords.length) return;
+
+  const db = await openDatabase();
+  const transaction = db.transaction(Object.values(STORES), "readwrite");
+
+  validRecords.forEach((record) => {
+    const store = transaction.objectStore(record.storeName);
+    if (record.deleted) store.delete(record.recordId);
+    else if (record.payload) store.put(record.payload);
+  });
+
   await transactionDone(transaction);
 }
 

@@ -2,7 +2,7 @@
 
 **One short lesson, one concrete action and one reflection every day.**
 
-Daily Growth is an installable, offline-first PWA for private personal-development content. The public app contains no book summaries. You import private JSON content packs locally, and the app stores the lessons, progress and journal entries in IndexedDB on that device.
+Daily Growth is an installable, local-first PWA for private personal-development content. The public app contains no book summaries. Lessons, progress and journal entries are saved immediately in IndexedDB for offline use and sync through the same Supabase account and project as Forge and Level90.
 
 ## What is included
 
@@ -18,6 +18,8 @@ Daily Growth is an installable, offline-first PWA for private personal-developme
 - Additive JSON imports with a preview of new, updated and unchanged lessons
 - IndexedDB storage, full JSON backup and merge-based restore
 - Removable content packs; progress reconnects if the same pack is re-imported
+- Supabase email/password account using the existing Forge and Level90 configuration
+- Automatic cross-device sync with an offline change queue and one-time IndexedDB migration
 - Responsive mobile layout, dark mode, adjustable text size and offline support
 - Settings in the top header beside the dark-mode toggle, keeping primary navigation focused on learning
 - A three-lesson original sample pack and a formal JSON Schema
@@ -31,6 +33,8 @@ python3 -m http.server 8080
 ```
 
 Then open `http://localhost:8080`.
+
+Before testing cloud sync, run `supabase/migrations/20260826_create_daily_growth_sync.sql` once in the existing Supabase project's SQL editor. See `SUPABASE-SETUP.md` for the complete setup and first-device migration sequence.
 
 ## Deploy on GitHub Pages
 
@@ -75,7 +79,7 @@ Use `sample-content-pack.json` as a readable example and `content-pack.schema.js
 
 Place working private JSON files in `content-packs/` or `private-content/`; both locations are ignored by Git. Imported files do not need to remain beside the app—the browser stores their data locally after import.
 
-Before clearing browser data or moving devices, use **Settings → Backup & transfer → Export full backup**. A backup includes imported content, progress, reflections and settings.
+Before clearing browser data, use **Settings → Backup & transfer → Export full backup**. A backup remains a useful independent copy of imported content, progress, reflections and settings even though the app now syncs automatically.
 
 ## Copyright boundary
 
@@ -83,4 +87,4 @@ Daily Growth is an independent educational tool and is not affiliated with or en
 
 ## Data and privacy
 
-There is no account, server database, analytics SDK or cloud sync. App data lives in the current browser profile. Different browsers and devices have separate libraries unless you transfer a backup manually.
+Daily Growth uses Supabase email/password authentication and the public publishable key already used by Forge and Level90. Row Level Security restricts cloud rows to the signed-in user. Imported content and learning history also remain in IndexedDB so the app continues working offline. There is no analytics SDK, service-role key or public content API in the app.

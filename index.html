@@ -17,7 +17,35 @@
   <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
 
-    <div id="app-shell" class="app-shell">
+    <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
+      <div class="auth-card">
+        <span class="auth-mark" aria-hidden="true">✦</span>
+        <p class="eyebrow">Your AuraOS account</p>
+        <h1 id="auth-title">Keep growing everywhere</h1>
+        <p>Use the same account as Forge and Level90 to sync Daily Growth across your devices.</p>
+
+        <div id="auth-loading" class="auth-loading" role="status">
+          <span class="auth-spinner" aria-hidden="true"></span>
+          <p>Checking your account…</p>
+        </div>
+
+        <div id="auth-form-content" hidden>
+          <div class="auth-mode-switch" aria-label="Account action">
+            <button id="sign-in-mode" class="is-active" type="button" aria-pressed="true">Sign in</button>
+            <button id="sign-up-mode" type="button" aria-pressed="false">Create account</button>
+          </div>
+          <form id="auth-form" novalidate>
+            <label>Email<input id="auth-email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" required /></label>
+            <label>Password<input id="auth-password" type="password" minlength="6" autocomplete="current-password" required /><small id="auth-password-help">Use the same account as Forge and Level90.</small></label>
+            <button id="auth-submit" class="button primary" type="submit">Sign in</button>
+          </form>
+          <p id="auth-message" class="auth-message" role="status" aria-live="polite"></p>
+          <small class="auth-offline-note">Your first sign-in needs an internet connection. Afterwards, your downloaded library remains available offline.</small>
+        </div>
+      </div>
+    </section>
+
+    <div id="app-shell" class="app-shell" hidden>
       <aside class="sidebar" aria-label="Main navigation">
         <button class="brand" data-view="today" aria-label="Daily Growth home">
           <span class="brand-mark" aria-hidden="true">✦</span>
@@ -46,7 +74,7 @@
         </nav>
 
         <div class="sidebar-growth" id="sidebar-growth"></div>
-        <p class="local-note"><span aria-hidden="true">●</span> Private &amp; on this device</p>
+        <p class="local-note" id="cloud-sidebar-status"><span aria-hidden="true">●</span> Private &amp; syncing</p>
       </aside>
 
       <div class="workspace">
@@ -108,6 +136,7 @@
       <div class="noscript">Daily Growth needs JavaScript enabled to save lessons and progress on this device.</div>
     </noscript>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3" crossorigin="anonymous"></script>
     <script type="module" src="./app.js"></script>
   </body>
 </html>

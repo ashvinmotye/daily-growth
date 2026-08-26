@@ -1,4 +1,5 @@
-const CACHE_NAME = "daily-growth-shell-v4";
+const CACHE_NAME = "daily-growth-shell-v5";
+const SUPABASE_SDK_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3";
 const ROOT = new URL("./", self.location.href);
 const APP_SHELL = [
   "./",
@@ -6,6 +7,8 @@ const APP_SHELL = [
   "./styles.css",
   "./app.js",
   "./db.js",
+  "./cloud.js",
+  "./sync-logic.js",
   "./explore-catalog.js",
   "./manifest.webmanifest",
   "./favicon.svg",
@@ -19,6 +22,8 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(APP_SHELL))
+      .then(() => caches.open(CACHE_NAME))
+      .then((cache) => cache.add(SUPABASE_SDK_URL).catch(() => {}))
       .then(() => self.skipWaiting()),
   );
 });
@@ -32,7 +37,14 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET" || new URL(event.request.url).origin !== self.location.origin) return;
+  const requestUrl = new URL(event.request.url);
+  if (event.request.method !== "GET") return;
+  if (event.request.url === SUPABASE_SDK_URL) {
+    event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
+    return;
+  }
+  if (requestUrl.hostname.endsWith(".supabase.co")) return;
+  if (requestUrl.origin !== self.location.origin) return;
 
   if (event.request.mode === "navigate") {
     event.respondWith(
