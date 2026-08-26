@@ -1,6 +1,6 @@
 # Daily Growth
 
-**One short lesson, one concrete action and one reflection every day.**
+**Daily personal-development lessons and a built-in universe of subjects to learn.**
 
 Daily Growth is an installable, local-first PWA for private personal-development content. The public app contains no book summaries. Lessons, progress and journal entries are saved immediately in IndexedDB for offline use and sync through the same Supabase account and project as Forge and Level90.
 
@@ -10,9 +10,11 @@ Daily Growth is an installable, local-first PWA for private personal-development
 - An editable Today’s Action field that keeps the lesson suggestion and completion checkbox
 - Selectable reading track with an independent remembered position for every content pack
 - Journey view with all imported lessons—future lessons are never locked
-- Explore: 12 Worlds, 60 territories and five focused days per territory
-- “Take Me Somewhere New” rotation that avoids recent/familiar topics and favours underexplored Worlds
-- Explore breadth, territory and self-rated recall analytics
+- Explore: 12 Worlds, 60 territories and 300 complete preloaded articles
+- Five connected articles per territory, written for readers starting with zero prior knowledge
+- Every Explore article includes an analogy, essential facts, a corrected misconception, comprehension activity, reflection question, optional sources and a 1–5 star rating
+- “Take Me Somewhere New” rotation that avoids recent topics and favours underexplored Worlds
+- Explore breadth, territory and average article-rating analytics
 - Private journal connected to each lesson
 - XP, levels, completion progress and a gentle reading rhythm
 - Additive JSON imports with a preview of new, updated and unchanged lessons
@@ -67,11 +69,11 @@ Selecting **All content packs** in Journey changes only the list view; it does n
 
 ## Explore a World
 
-Open **Explore** to browse 12 broad Worlds and five territories within each World. A territory is a self-paced five-day journey; every day contains a short reading, a concrete action, a reflection and a simple recall check. Explore is a second lane alongside imported book/content packs, so starting a territory never changes the current content pack on Today.
+Open **Explore** to browse 12 broad Worlds and five territories within each World. A territory is a self-paced five-day course made from five connected, preloaded articles. The material is already bundled and cached for offline reading: Explore never expects the reader to research the topic elsewhere before answering a prompt. Each article develops a working mental model, then provides an analogy, essential facts, a corrected misconception, a comprehension activity with a model answer, one optional written question, deeper-reading sources and a quality rating. Explore remains a second lane alongside imported book/content packs, so starting a territory never changes the current content pack on Today.
 
-**Take Me Somewhere New** uses local progress only. It avoids recently studied territories, lowers the priority of areas with high completion/recall signals, and favours Worlds with less coverage. Insights explains breadth as Worlds entered and retention as the average of your own Revisit, Familiar and Remembered checks.
+**Take Me Somewhere New** uses local progress only. It avoids recently studied territories, lowers the priority of completed areas and favours Worlds with less coverage. Insights shows breadth as Worlds entered and article quality as the average of the reader's 1–5 star ratings.
 
-The built-in Explore catalog is original app content. Explore progress, action notes, reflections, recall checks and rotation history are included in full backups.
+The built-in Explore catalog is original app content. Explore progress, optional notes, article ratings and rotation history are included in full backups and Supabase sync.
 
 Use `sample-content-pack.json` as a readable example and `content-pack.schema.json` as the specification.
 

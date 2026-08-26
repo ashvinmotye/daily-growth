@@ -1,7 +1,7 @@
 {
   "name": "Daily Growth",
   "short_name": "Growth",
-  "description": "One short lesson, one concrete action and one reflection every day—plus 12 Worlds to explore.",
+  "description": "Daily personal-development lessons plus 300 preloaded Explore articles across 12 Worlds.",
   "id": "./",
   "start_url": "./index.html",
   "scope": "./",

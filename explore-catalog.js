@@ -1,3 +1,5 @@
+import { buildExploreArticle } from "./explore-articles.js";
+
 export const EXPLORE_WORLDS = [
   {
     id: "universe-physics",
@@ -169,39 +171,6 @@ export const EXPLORE_WORLDS = [
   },
 ];
 
-const DAY_LENSES = [
-  {
-    label: "Build the map",
-    why: "A clear first model gives later detail somewhere to attach.",
-    action: (topic) => `Explain “${topic}” in two plain-language sentences, then write one question you still have.`,
-    reflection: (territory) => `What did I assume about ${territory.toLowerCase()} before today?`,
-  },
-  {
-    label: "See the mechanism",
-    why: "Understanding a process is more transferable than memorising an isolated fact.",
-    action: (topic) => `Draw or list the main steps behind “${topic}” without looking back, then check what you missed.`,
-    reflection: () => "Which link in the mechanism is least clear to me?",
-  },
-  {
-    label: "Read the evidence",
-    why: "Good explanations become stronger when you can say what observation would support or challenge them.",
-    action: (topic) => `Name one observation, example or measurement that could provide evidence about “${topic}”.`,
-    reflection: () => "What would change my mind about today's idea?",
-  },
-  {
-    label: "Make the connection",
-    why: "Knowledge becomes usable when it connects to other systems instead of remaining an isolated note.",
-    action: (topic) => `Connect “${topic}” to something in another World, your work or ordinary life. Write the link explicitly.`,
-    reflection: () => "Which connection made this idea easier to remember?",
-  },
-  {
-    label: "Use and retrieve",
-    why: "Retrieving and teaching an idea exposes gaps while making future recall easier.",
-    action: (topic) => `Give a one-minute teach-back of “${topic}” without notes, then add the one detail you forgot.`,
-    reflection: () => "What can I now explain that I could not explain five days ago?",
-  },
-];
-
 export function allExploreTerritories() {
   return EXPLORE_WORLDS.flatMap((world) => world.territories.map(([id, title, description, topics]) => ({
     id,
@@ -217,7 +186,7 @@ export function allExploreTerritories() {
 
 export function exploreLessonsForTerritory(territory) {
   return territory.topics.map((topic, index) => {
-    const lens = DAY_LENSES[index];
+    const article = buildExploreArticle({ topic, index, territory });
     return {
       id: `explore:${territory.id}:${index + 1}`,
       packId: `explore:${territory.id}`,
@@ -226,13 +195,11 @@ export function exploreLessonsForTerritory(territory) {
       worldId: territory.worldId,
       order: index + 1,
       title: topic,
-      summary: `${territory.description} Today, focus on ${topic.toLowerCase()}. Read slowly enough to form a simple mental model, then test it through the short activity below. The goal is not to collect every detail; it is to leave with one idea you can explain clearly and reconnect to later.`,
-      whyItMatters: lens.why,
-      example: `Look for ${topic.toLowerCase()} in a real system, a familiar object, a current decision or a reliable explanation you have encountered. Ask what changes, what stays stable and what evidence makes the explanation credible.`,
-      action: lens.action(topic),
-      reflection: lens.reflection(territory.title),
-      tags: [territory.worldTitle, territory.title, lens.label],
-      exploreDayLabel: lens.label,
+      summary: article.lede,
+      reflection: article.reflectionQuestion,
+      tags: [territory.worldTitle, territory.title, topic],
+      exploreDayLabel: topic,
+      article,
     };
   });
 }

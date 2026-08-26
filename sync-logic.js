@@ -44,6 +44,8 @@ export function mergeInitialPayload(storeName, localPayload, cloudPayload) {
     }
     if (!("recallRating" in cloudPayload) && "recallRating" in localPayload) merged.recallRating = localPayload.recallRating;
     if (!("recallRatedAt" in cloudPayload) && "recallRatedAt" in localPayload) merged.recallRatedAt = localPayload.recallRatedAt;
+    if (!("articleRating" in cloudPayload) && "articleRating" in localPayload) merged.articleRating = localPayload.articleRating;
+    if (!("articleRatedAt" in cloudPayload) && "articleRatedAt" in localPayload) merged.articleRatedAt = localPayload.articleRatedAt;
     return merged;
   }
 

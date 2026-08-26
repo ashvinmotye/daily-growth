@@ -25,6 +25,8 @@ test("the service worker caches sync modules and never caches Supabase API respo
   const worker = await read("sw.js");
   assert.ok(worker.includes('"./cloud.js"'));
   assert.ok(worker.includes('"./sync-logic.js"'));
+  assert.ok(worker.includes('"./explore-articles.js"'));
+  assert.ok(worker.includes('"./explore-briefs.js"'));
   assert.ok(worker.includes('hostname.endsWith(".supabase.co")'));
 });
 

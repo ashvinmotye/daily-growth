@@ -22,7 +22,7 @@ import {
   exploreLessonsForTerritory,
 } from "./explore-catalog.js";
 
-const APP_VERSION = "2.1.0";
+const APP_VERSION = "2.2.0";
 const main = document.querySelector("#main-content");
 const pageTitle = document.querySelector("#page-title");
 const pageEyebrow = document.querySelector("#page-eyebrow");
@@ -180,11 +180,10 @@ function territoryStats(territoryId) {
   const progress = progressMap();
   const completed = lessons.filter((lesson) => progress.get(lesson.id)?.completedAt).length;
   const ratings = lessons
-    .map((lesson) => progress.get(lesson.id)?.recallRating)
-    .filter((rating) => ["revisit", "familiar", "remembered"].includes(rating));
-  const ratingValue = { revisit: 30, familiar: 65, remembered: 100 };
-  const retention = ratings.length
-    ? Math.round(ratings.reduce((sum, rating) => sum + ratingValue[rating], 0) / ratings.length)
+    .map((lesson) => Number(progress.get(lesson.id)?.articleRating))
+    .filter((rating) => Number.isInteger(rating) && rating >= 1 && rating <= 5);
+  const averageRating = ratings.length
+    ? Math.round((ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length) * 10) / 10
     : null;
   const currentIndex = lessons.findIndex((lesson) => !progress.get(lesson.id)?.completedAt);
   return {
@@ -193,7 +192,7 @@ function territoryStats(territoryId) {
     percent: Math.round((completed / lessons.length) * 100),
     currentIndex: currentIndex >= 0 ? currentIndex : lessons.length - 1,
     finished: completed === lessons.length,
-    retention,
+    averageRating,
     ratingCount: ratings.length,
   };
 }
@@ -204,11 +203,10 @@ function exploreAnalytics() {
   const worldsStarted = new Set(startedTerritories.map((territory) => territory.worldId));
   const completedTerritories = startedTerritories.filter((territory) => territoryStats(territory.id).finished);
   const rated = startedTerritories.flatMap((territory) => territoryStats(territory.id).lessons)
-    .map((lesson) => progressMap().get(lesson.id)?.recallRating)
-    .filter((rating) => ["revisit", "familiar", "remembered"].includes(rating));
-  const ratingValue = { revisit: 30, familiar: 65, remembered: 100 };
-  const retention = rated.length
-    ? Math.round(rated.reduce((sum, rating) => sum + ratingValue[rating], 0) / rated.length)
+    .map((lesson) => Number(progressMap().get(lesson.id)?.articleRating))
+    .filter((rating) => Number.isInteger(rating) && rating >= 1 && rating <= 5);
+  const averageRating = rated.length
+    ? Math.round((rated.reduce((sum, rating) => sum + rating, 0) / rated.length) * 10) / 10
     : null;
   return {
     started,
@@ -216,7 +214,7 @@ function exploreAnalytics() {
     worldsStarted,
     completedTerritories,
     breadthPercent: Math.round((worldsStarted.size / EXPLORE_WORLDS.length) * 100),
-    retention,
+    averageRating,
     ratedCount: rated.length,
   };
 }
@@ -241,7 +239,7 @@ function chooseSomewhereNew() {
     const stats = territoryStats(territory.id);
     const recentIndex = recent.lastIndexOf(territory.id);
     const recencyPenalty = recentIndex >= 0 ? 240 + recentIndex * 10 : 0;
-    const familiarityPenalty = (stats.retention ?? 0) * 0.7 + stats.completed * 14;
+    const familiarityPenalty = stats.completed * 14;
     const novelty = analytics.started.has(territory.id) ? 0 : 150;
     const breadth = 120 - (worldStartedCount.get(territory.worldId) || 0) * 24;
     const dailyTieBreak = stableDailyNumber(`${localDateKey()}:${territory.id}`) * 12;
@@ -778,7 +776,7 @@ function renderExplore() {
       <div class="explore-hero-copy">
         <p class="eyebrow">A second learning lane</p>
         <h2>Follow curiosity<br><em>beyond the familiar.</em></h2>
-        <p>Explore 12 Worlds through focused five-day journeys. Each day takes about 5–10 minutes and ends with a small act of retrieval.</p>
+        <p>Explore 12 Worlds through focused five-day courses. Every day opens a complete preloaded article, and the five articles build enough context for a working conversation about the subject.</p>
         <button class="button explore-surprise" data-action="surprise-me"><span aria-hidden="true">✦</span> Take Me Somewhere New</button>
         <small>The suggestion avoids recent journeys and leans toward Worlds you know less well.</small>
       </div>
@@ -792,7 +790,7 @@ function renderExplore() {
       <div><strong>${analytics.worldsStarted.size}<small>/12</small></strong><span>Worlds entered</span></div>
       <div><strong>${analytics.startedTerritories.length}<small>/60</small></strong><span>Territories started</span></div>
       <div><strong>${analytics.completedTerritories.length}</strong><span>Journeys completed</span></div>
-      <div><strong>${analytics.retention === null ? "—" : `${analytics.retention}%`}</strong><span>Recall signal</span></div>
+      <div><strong>${analytics.averageRating === null ? "—" : `${analytics.averageRating} ★`}</strong><span>Average article rating</span></div>
     </section>
 
     ${activeTerritory && activeStats && !activeStats.finished ? `
@@ -826,7 +824,7 @@ function renderExplore() {
       <section class="territory-browser" id="territories">
         <div class="territory-heading" style="--world-color:${escapeHtml(selectedWorld.color)}">
           <span aria-hidden="true">${selectedWorld.symbol}</span>
-          <div><p class="eyebrow">${escapeHtml(selectedWorld.title)}</p><h2>Choose a five-day territory</h2><p>${escapeHtml(selectedWorld.description)}</p></div>
+          <div><p class="eyebrow">${escapeHtml(selectedWorld.title)}</p><h2>Choose a five-article territory</h2><p>${escapeHtml(selectedWorld.description)}</p></div>
         </div>
         <div class="territory-grid">
           ${selectedWorld.territories.map(([territoryId]) => {
@@ -835,7 +833,7 @@ function renderExplore() {
             const started = analytics.started.has(territoryId);
             return `
               <button class="territory-card ${stats.finished ? "is-complete" : ""}" data-action="open-explore-territory" data-territory-id="${escapeHtml(territoryId)}">
-                <div class="territory-card-top"><span>${stats.finished ? "✓" : started ? `${stats.completed}/5` : "5 days"}</span><small>5–10 min/day</small></div>
+                <div class="territory-card-top"><span>${stats.finished ? "✓" : started ? `${stats.completed}/5` : "5 articles"}</span><small>Preloaded · offline</small></div>
                 <strong>${escapeHtml(territory.title)}</strong>
                 <p>${escapeHtml(territory.description)}</p>
                 <div class="territory-progress"><span style="width:${stats.percent}%;background:${escapeHtml(territory.color)}"></span></div>
@@ -849,6 +847,15 @@ function renderExplore() {
   `;
 }
 
+function renderExploreArticleSection(section) {
+  return `
+    <section class="article-section">
+      <h3>${escapeHtml(section.heading)}</h3>
+      ${section.paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("")}
+    </section>
+  `;
+}
+
 function renderExploreTerritory(territory) {
   const analytics = exploreAnalytics();
   const stats = territoryStats(territory.id);
@@ -857,17 +864,16 @@ function renderExploreTerritory(territory) {
   const lesson = stats.lessons[safeDayIndex];
   const progress = progressMap().get(lesson.id) || { lessonId: lesson.id };
   const savedReflection = reflectionMap().get(lesson.id)?.text || "";
-  const savedActionNote = progress.actionNote || "";
   const isComplete = Boolean(progress.completedAt);
-  const actionComplete = Boolean(progress.actionCompletedAt);
-  const recallRating = progress.recallRating || "";
+  const articleRating = Number(progress.articleRating) || 0;
+  const article = lesson.article;
 
   main.innerHTML = `
     <button class="back-to-explore" data-action="back-explore">← Back to all Worlds</button>
-    ${ui.exploreSuggestionReason ? `<section class="suggestion-reason"><span aria-hidden="true">✦</span><div><strong>Why this journey?</strong><p>${escapeHtml(ui.exploreSuggestionReason)}</p></div></section>` : ""}
+    ${ui.exploreSuggestionReason ? `<section class="suggestion-reason"><span aria-hidden="true">✦</span><div><strong>Suggested route</strong><p>${escapeHtml(ui.exploreSuggestionReason)}</p></div></section>` : ""}
     <section class="territory-hero" style="--world-color:${escapeHtml(territory.color)}">
       <div><p class="eyebrow">${escapeHtml(territory.worldTitle)}</p><h2>${escapeHtml(territory.title)}</h2><p>${escapeHtml(territory.description)}</p></div>
-      <div class="territory-hero-meta"><span>${territory.worldSymbol}</span><strong>5 days</strong><small>5–10 minutes per day</small></div>
+      <div class="territory-hero-meta"><span>${territory.worldSymbol}</span><strong>5 articles</strong><small>A complete five-day introduction</small></div>
     </section>
 
     <nav class="explore-day-nav" aria-label="Journey days">
@@ -880,54 +886,75 @@ function renderExploreTerritory(territory) {
 
     ${!started ? `
       <section class="explore-preview">
-        <div><p class="eyebrow">Your route</p><h2>Five small steps into ${escapeHtml(territory.title)}</h2><p>You can read every day at your own pace. Starting adds this territory to your Explore path and makes Day 1 your current session.</p></div>
-        <ol>${stats.lessons.map((day, index) => `<li><span>0${index + 1}</span><div><strong>${escapeHtml(day.exploreDayLabel)}</strong><small>${escapeHtml(day.title)}</small></div></li>`).join("")}</ol>
-        <button class="button primary" data-action="start-territory" data-territory-id="${escapeHtml(territory.id)}">Begin this journey <span>→</span></button>
+        <div><p class="eyebrow">Included curriculum</p><h2>Five connected articles about ${escapeHtml(territory.title)}</h2><p>Everything you need is already inside the app and available offline. Each article adds one layer so that, by Day 5, you can explain the subject and follow an informed conversation about it.</p></div>
+        <ol>${stats.lessons.map((day, index) => `<li><span>0${index + 1}</span><div><strong>${escapeHtml(day.title)}</strong><small>${day.article.readingMinutes} min · ${day.article.wordCount} words</small></div></li>`).join("")}</ol>
+        <button class="button primary" data-action="start-territory" data-territory-id="${escapeHtml(territory.id)}">Read the first article <span>→</span></button>
       </section>
     ` : `
       <section class="explore-lesson-layout">
         <div class="lesson-column">
           <article class="lesson-paper explore-paper ${isComplete ? "is-complete" : ""}">
             <div class="paper-accent" style="--pack-color:${escapeHtml(territory.color)}"></div>
-            <div class="lesson-meta"><span>Day ${safeDayIndex + 1} of 5</span><span class="meta-dot">•</span><span>${escapeHtml(lesson.exploreDayLabel)}</span></div>
+            <div class="lesson-meta"><span>Day ${safeDayIndex + 1} of 5</span><span class="meta-dot">•</span><span>${escapeHtml(territory.title)}</span></div>
             <h2>${escapeHtml(lesson.title)}</h2>
-            <p class="lesson-summary">${escapeHtml(lesson.summary)}</p>
-            <section class="lesson-section why-section"><span class="section-symbol" aria-hidden="true">◎</span><div><h3>Why it matters</h3><p>${escapeHtml(lesson.whyItMatters)}</p></div></section>
-            <section class="lesson-section example-section"><span class="section-symbol" aria-hidden="true">◇</span><div><h3>Look for this</h3><p>${escapeHtml(lesson.example)}</p></div></section>
+            <div class="article-read-meta" aria-label="Article details"><span>${article.readingMinutes} min read</span><span>${article.wordCount} words</span><span>Available offline</span></div>
+            <p class="article-lede">${escapeHtml(article.lede)}</p>
+
+            ${article.sections.map(renderExploreArticleSection).join("")}
+
+            <section class="article-feature analogy-feature">
+              <span aria-hidden="true">◇</span>
+              <div><h3>One useful analogy</h3><p>${escapeHtml(article.analogy)}</p></div>
+            </section>
+
+            <section class="article-section fact-section">
+              <h3>The essential facts</h3>
+              <ul>${article.essentialFacts.map((fact) => `<li>${escapeHtml(fact)}</li>`).join("")}</ul>
+            </section>
+
+            <section class="article-feature misconception-feature">
+              <span aria-hidden="true">!</span>
+              <div><h3>A common misconception</h3><p>${escapeHtml(article.misconception)}</p></div>
+            </section>
+
+            <section class="article-section comprehension-section">
+              <p class="eyebrow">Check your understanding</p>
+              <h3>A small comprehension activity</h3>
+              <p>${escapeHtml(article.activity.prompt)}</p>
+              <details class="model-answer"><summary>Reveal a model answer</summary><p>${escapeHtml(article.activity.answer)}</p></details>
+            </section>
+
+            <section class="article-question-card">
+              <p class="eyebrow">One question to think about</p>
+              <h3>${escapeHtml(article.reflectionQuestion)}</h3>
+              <label class="sr-only" for="reflection-text">Your optional answer</label>
+              <textarea id="reflection-text" rows="4" placeholder="Write an optional answer or note…">${escapeHtml(savedReflection)}</textarea>
+              <div class="reflection-footer"><span>Your note syncs privately with your progress.</span><button class="button secondary small" data-action="save-reflection" data-lesson-id="${escapeHtml(lesson.id)}">Save note</button></div>
+            </section>
+
+            <section class="article-sources">
+              <h3>Explore further <small>Optional</small></h3>
+              <ul>${article.sources.map(([label, url]) => `<li><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)} <span aria-hidden="true">↗</span></a></li>`).join("")}</ul>
+            </section>
+
+            <section class="article-rating-card">
+              <div><p class="eyebrow">Rate this article</p><h3>${articleRating ? `You rated it ${articleRating} out of 5` : "How useful was this article?"}</h3><p>Your rating is for the quality of the article—not a score for your understanding.</p></div>
+              <div class="article-stars" role="radiogroup" aria-label="Rate this article from 1 to 5 stars">
+                ${[1, 2, 3, 4, 5].map((rating) => `<button class="${rating <= articleRating ? "is-active" : ""}" data-action="rate-article" data-lesson-id="${escapeHtml(lesson.id)}" data-rating="${rating}" role="radio" aria-checked="${articleRating === rating}" aria-label="${rating} ${rating === 1 ? "star" : "stars"}">★</button>`).join("")}
+              </div>
+            </section>
+
             <div class="tag-row">${lesson.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>
           </article>
 
-          <section class="practice-card action-card ${actionComplete ? "is-done" : ""}">
-            <div class="practice-number">01</div>
-            <div class="practice-content">
-              <p class="eyebrow">Today’s action</p>
-              <p class="action-suggestion"><strong>Suggested:</strong> ${escapeHtml(lesson.action)}</p>
-              <label class="action-input-label" for="action-note">What will you do?</label>
-              <div class="action-input-row"><input id="action-note" type="text" maxlength="280" placeholder="Write your concrete action…" value="${escapeHtml(savedActionNote)}" /><button class="button secondary small" data-action="save-action-note" data-lesson-id="${escapeHtml(lesson.id)}">Save</button></div>
-              <button class="check-action" data-action="toggle-action" data-lesson-id="${escapeHtml(lesson.id)}" aria-pressed="${actionComplete}"><span class="check-box" aria-hidden="true">${actionComplete ? "✓" : ""}</span>${actionComplete ? "Action completed" : "I did this today"}<small>+10 XP</small></button>
-            </div>
-          </section>
-
-          <section class="practice-card reflection-card">
-            <div class="practice-number">02</div>
-            <div class="practice-content"><p class="eyebrow">Pause &amp; reflect</p><h3>${escapeHtml(lesson.reflection)}</h3><label class="sr-only" for="reflection-text">Your reflection</label><textarea id="reflection-text" rows="5" placeholder="Write what comes to mind…">${escapeHtml(savedReflection)}</textarea><div class="reflection-footer"><span>Your words stay on this device.</span><button class="button secondary small" data-action="save-reflection" data-lesson-id="${escapeHtml(lesson.id)}">Save reflection <small>+5 XP</small></button></div></div>
-          </section>
-
-          <section class="recall-card">
-            <div><p class="eyebrow">Memory check</p><h3>Without looking back, how available is today’s idea?</h3><p>This is a signal, not a grade. It helps Explore rotate toward areas that need more attention.</p></div>
-            <div class="recall-options" role="group" aria-label="Recall rating">
-              ${[["revisit", "↻", "Revisit"], ["familiar", "~", "Familiar"], ["remembered", "✓", "Remembered"]].map(([value, icon, label]) => `<button class="${recallRating === value ? "is-active" : ""}" data-action="rate-recall" data-lesson-id="${escapeHtml(lesson.id)}" data-rating="${value}"><span>${icon}</span><strong>${label}</strong></button>`).join("")}
-            </div>
-          </section>
-
           <div class="lesson-completion">
-            <button class="button ${isComplete ? "completed" : "primary"} complete-button" data-action="complete-explore-day" data-lesson-id="${escapeHtml(lesson.id)}" ${isComplete ? "disabled" : ""}><span aria-hidden="true">${isComplete ? "✓" : "✦"}</span>${isComplete ? `Completed ${formatDate(progress.completedAt, { month: "short", day: "numeric" })}` : safeDayIndex < 4 ? "Complete & continue" : "Complete territory"}${isComplete ? "" : "<small>+10 XP</small>"}</button>
-            <p>${stats.finished ? "This territory is now part of your wider map." : "Small retrievals turn exposure into usable knowledge."}</p>
+            <button class="button ${isComplete ? "completed" : "primary"} complete-button" data-action="complete-explore-day" data-lesson-id="${escapeHtml(lesson.id)}" ${isComplete ? "disabled" : ""}><span aria-hidden="true">${isComplete ? "✓" : "✦"}</span>${isComplete ? `Completed ${formatDate(progress.completedAt, { month: "short", day: "numeric" })}` : safeDayIndex < 4 ? "Finish article & continue" : "Complete territory"}${isComplete ? "" : "<small>+10 XP</small>"}</button>
+            <p>${stats.finished ? "You now have a working introduction to this territory." : "Finish when you have read the article and checked the central idea."}</p>
           </div>
         </div>
 
         <aside class="explore-aside">
-          <section class="explore-progress-card" style="--world-color:${escapeHtml(territory.color)}"><p class="eyebrow">Territory progress</p><strong>${stats.completed}<small>/5 days</small></strong><div class="territory-progress"><span style="width:${stats.percent}%"></span></div><dl><div><dt>Recall</dt><dd>${stats.retention === null ? "—" : `${stats.retention}%`}</dd></div><div><dt>World</dt><dd>${EXPLORE_WORLDS.findIndex((world) => world.id === territory.worldId) + 1}/12</dd></div></dl>${stats.finished ? `<button class="button secondary small" data-action="surprise-me">Find another World</button>` : ""}</section>
+          <section class="explore-progress-card" style="--world-color:${escapeHtml(territory.color)}"><p class="eyebrow">Territory progress</p><strong>${stats.completed}<small>/5 articles</small></strong><div class="territory-progress"><span style="width:${stats.percent}%"></span></div><dl><div><dt>Article rating</dt><dd>${stats.averageRating === null ? "—" : `${stats.averageRating} ★`}</dd></div><div><dt>World</dt><dd>${EXPLORE_WORLDS.findIndex((world) => world.id === territory.worldId) + 1}/12</dd></div></dl>${stats.finished ? `<button class="button secondary small" data-action="surprise-me">Find another World</button>` : ""}</section>
         </aside>
       </section>
     `}
@@ -1002,10 +1029,10 @@ function renderInsights() {
     </section>
 
     <section class="explore-insights-panel">
-      <div class="section-heading"><div><p class="eyebrow">Explore</p><h2>Breadth &amp; retention</h2></div><button class="button secondary small" data-view="explore">Open Explore →</button></div>
+      <div class="section-heading"><div><p class="eyebrow">Explore</p><h2>Breadth &amp; article ratings</h2></div><button class="button secondary small" data-view="explore">Open Explore →</button></div>
       <div class="explore-insight-summary">
         <article><span aria-hidden="true">◇</span><div><small>Breadth</small><strong>${explore.breadthPercent}%</strong><p>${explore.worldsStarted.size} of 12 Worlds entered</p></div></article>
-        <article><span aria-hidden="true">◎</span><div><small>Recall signal</small><strong>${explore.retention === null ? "—" : `${explore.retention}%`}</strong><p>${explore.ratedCount ? `${explore.ratedCount} memory ${explore.ratedCount === 1 ? "check" : "checks"}` : "Rate recall after an Explore day"}</p></div></article>
+        <article><span aria-hidden="true">★</span><div><small>Article rating</small><strong>${explore.averageRating === null ? "—" : `${explore.averageRating} ★`}</strong><p>${explore.ratedCount ? `${explore.ratedCount} ${explore.ratedCount === 1 ? "article" : "articles"} rated` : "Rate articles after reading"}</p></div></article>
         <article><span aria-hidden="true">✓</span><div><small>Territories</small><strong>${explore.completedTerritories.length}<small> complete</small></strong><p>${explore.startedTerritories.length} of 60 started</p></div></article>
       </div>
       <div class="world-coverage-list">
@@ -1015,7 +1042,7 @@ function renderInsights() {
           return `<button data-action="view-insight-world" data-world-id="${escapeHtml(world.id)}"><span class="pack-dot" style="background:${escapeHtml(world.color)}"></span><div><strong>${escapeHtml(world.title)}</strong><small>${completed} complete · ${started}/5 entered</small><div class="pack-bar"><span style="width:${started * 20}%;background:${escapeHtml(world.color)}"></span></div></div><b>${started * 20}%</b></button>`;
         }).join("")}
       </div>
-      <p class="gentle-note">Breadth rewards entering different Worlds. Recall is based only on your own Revisit, Familiar and Remembered checks—not a test score.</p>
+      <p class="gentle-note">Breadth reflects the Worlds you have entered. Article stars rate the material itself and are never treated as a score for your understanding.</p>
     </section>
 
     <section class="pack-progress-panel">
@@ -1052,7 +1079,7 @@ function renderSettings() {
           <button class="button ghost small" data-action="sign-out" ${cloud.busy ? "disabled" : ""}>Sign out</button>
         </div>
         <div class="cloud-sync-row">
-          <div><strong>Daily Growth data</strong><span class="is-${escapeHtml(cloud.tone || "waiting")}">${escapeHtml(queuedLabel)}</span><small>Content packs, reading positions, Explore progress, actions, recall checks, reflections and settings sync automatically.</small></div>
+          <div><strong>Daily Growth data</strong><span class="is-${escapeHtml(cloud.tone || "waiting")}">${escapeHtml(queuedLabel)}</span><small>Content packs, reading positions, Explore progress, article ratings, notes and settings sync automatically.</small></div>
           <button class="button secondary small" data-action="sync-now" ${cloud.busy || cloud.connection !== "Connected" ? "disabled" : ""}>${cloud.busy ? "Syncing…" : "Sync now"}</button>
         </div>
       </section>
@@ -1406,8 +1433,7 @@ async function handleAction(button) {
     const lesson = exploreLessonById.get(button.dataset.lessonId);
     if (!lesson) return;
     const existing = progressMap().get(lesson.id) || { lessonId: lesson.id };
-    const actionNote = document.querySelector("#action-note")?.value.trim() ?? existing.actionNote ?? "";
-    await saveProgress({ ...existing, actionNote, completedAt: new Date().toISOString() });
+    await saveProgress({ ...existing, completedAt: new Date().toISOString() });
     await recordExploreTerritory(lesson.territoryId);
     await refreshState();
     const updatedStats = territoryStats(lesson.territoryId);
@@ -1416,16 +1442,18 @@ async function handleAction(button) {
     render();
     window.scrollTo({ top: 0, behavior: "smooth" });
     celebrate();
-    showToast(updatedStats.finished ? "Territory completed. Your map is wider. +10 XP" : "Explore day completed. The next step is ready. +10 XP");
+    showToast(updatedStats.finished ? "Territory completed. You finished all five articles. +10 XP" : "Article completed. The next article is ready. +10 XP");
   }
 
-  if (action === "rate-recall") {
+  if (action === "rate-article") {
     const lessonId = button.dataset.lessonId;
+    const articleRating = Number(button.dataset.rating);
+    if (!Number.isInteger(articleRating) || articleRating < 1 || articleRating > 5) return;
     const existing = progressMap().get(lessonId) || { lessonId };
-    await saveProgress({ ...existing, recallRating: button.dataset.rating, recallRatedAt: new Date().toISOString() });
+    await saveProgress({ ...existing, articleRating, articleRatedAt: new Date().toISOString() });
     await refreshState();
     render();
-    showToast("Memory check saved.");
+    showToast(`Article rated ${articleRating} ${articleRating === 1 ? "star" : "stars"}.`);
   }
 
   if (action === "toggle-action") {

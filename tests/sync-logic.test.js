@@ -30,6 +30,8 @@ test("first cloud merge preserves local-only progress fields without replacing c
     completedAt: "2026-08-20T08:00:00.000Z",
     actionNote: "Local action",
     recallRating: "familiar",
+    articleRating: 4,
+    articleRatedAt: "2026-08-26T10:00:00.000Z",
   };
   const cloud = {
     lessonId: "lesson-1",
@@ -42,6 +44,8 @@ test("first cloud merge preserves local-only progress fields without replacing c
     completedAt: "2026-08-21T08:00:00.000Z",
     actionNote: "Cloud action",
     recallRating: "familiar",
+    articleRating: 4,
+    articleRatedAt: "2026-08-26T10:00:00.000Z",
   });
 });
 

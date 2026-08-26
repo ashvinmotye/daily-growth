@@ -1,4 +1,4 @@
-const CACHE_NAME = "daily-growth-shell-v5";
+const CACHE_NAME = "daily-growth-shell-v6";
 const SUPABASE_SDK_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3";
 const ROOT = new URL("./", self.location.href);
 const APP_SHELL = [
@@ -10,6 +10,8 @@ const APP_SHELL = [
   "./cloud.js",
   "./sync-logic.js",
   "./explore-catalog.js",
+  "./explore-articles.js",
+  "./explore-briefs.js",
   "./manifest.webmanifest",
   "./favicon.svg",
   "./icons/icon-192.png",
